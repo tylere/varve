@@ -97,20 +97,24 @@ Two processes: the FastAPI web server and the `varve monitor` CLI. They share th
 
 ```python
 class Detector:
-    def fetch_metadata(self) -> dict       # lightweight: version, last-modified, size
-    def compute_fingerprint(self) -> str   # ETag, checksum, or version hash
-    def download(self, dest_path: Path) -> None  # stream dataset to local file
+    def fetch_metadata(self) -> dict           # lightweight: version, last-modified, size
+    def compute_fingerprint(self) -> str       # ETag, checksum, or version hash
+    def download(self, dest_dir: Path) -> list[Path]  # stream files into dest_dir, return list
 ```
+
+`download()` always writes into a directory and returns the list of files placed there. Single-file datasets return a one-element list. Mirror adapters iterate over the list and upload each file individually — no zipping.
+
+**Fingerprinting collections:** SHA-256 of the sorted `[(filename, etag_or_size), ...]` pairs. Stable across runs when the collection is unchanged; changes when any file is added, removed, or modified.
 
 ### `URLDetector`
 - `fetch_metadata()`: HEAD request; captures `ETag`, `Last-Modified`, `Content-Length`
-- `compute_fingerprint()`: returns `ETag` if present, else SHA-256 of a range request (first 1 MB) as a cheap probe; falls back to full download + SHA-256 if neither is available
-- `download()`: streaming GET to `dest_path`
+- `compute_fingerprint()`: returns `ETag` if present; else SHA-256 of the first 1 MB via range request as a cheap probe; falls back to full-download SHA-256 only if neither is available
+- `download()`: streaming GET into `dest_dir/{filename}` (filename inferred from URL or `Content-Disposition`); returns `[dest_dir/filename]`
 
 ### `STACDetector`
-- `fetch_metadata()`: GET the STAC Item JSON; captures `datetime`, `updated`, asset `href`s
-- `compute_fingerprint()`: SHA-256 of the canonicalized asset `href` list + item `updated` field
-- `download()`: downloads all assets listed in `detector_config.asset_keys` (or all assets if not specified) into a local directory, then zips it
+- `fetch_metadata()`: GET the STAC Item JSON; captures `datetime`, `updated`, asset `href`s and their sizes
+- `compute_fingerprint()`: collection fingerprint over all asset `(href-basename, etag-or-size)` pairs + item `updated` field
+- `download()`: HEAD each asset href first (cheap); streaming GET each asset into `dest_dir/`; returns list of downloaded paths. Only downloads assets listed in `detector_config.asset_keys` if specified, otherwise all assets.
 
 ### `DOIDetector`, `DataPortalDetector`
 Registered but raise `NotImplementedError`. Architecture is in place for future implementation.
@@ -138,8 +142,8 @@ varve monitor run --force      # ignore interval, check all enabled datasets now
 2. Compare fingerprint to `dataset.last_fingerprint`
 3. **Unchanged:** write `monitor_run` (outcome `unchanged`); update `dataset.last_checked_at`; stop
 4. **Changed or first run:**
-   a. Call `detector.download()` to a temp directory
-   b. For each active assignment: call the appropriate mirror adapter's `upload()`
+   a. Call `detector.download()` into a temp directory; receives list of local paths
+   b. For each active assignment: call the appropriate mirror adapter's `upload()`, passing the file list
    c. Record a `mirror_copy` row per destination
    d. Mint mock DOI: `10.5072/varve.{dataset_id}.{unix_timestamp}`; store in `mirror_copy.mock_doi`; log `IsDerivedFrom: {dataset.source_url}`
    e. Update `dataset.last_fingerprint`, `dataset.last_checked_at`
@@ -192,24 +196,31 @@ The CLI prints structured log lines (timestamp + level + message) that can be co
 
 ```python
 class Mirror:
-    def upload(self, local_path: Path, dataset: Dataset, run_metadata: dict) -> str
-    # returns remote_identifier (Dryad dataset ID or S3 key prefix)
+    def upload(self, files: list[Path], dataset: Dataset, run_metadata: dict) -> str
+    # returns remote_identifier (Dryad dataset ID or source.coop URL prefix)
 ```
+
+Accepts a list of local file paths (one for single-file datasets, many for collections). Returns a human-readable remote identifier stored in `mirror_copy.remote_identifier`.
 
 ### `DryadMirror`
 - Auth: OAuth2 client-credentials flow against `https://sandbox.datadryad.org` (sandbox for prototype)
-- Flow: `POST /api/v2/datasets` → `PUT /api/v2/datasets/{id}/files/{filename}` → `POST /api/v2/datasets/{id}/versions`
+- **Size check:** if total file size exceeds 10 GB, raise `MirrorSizeError` immediately — Dryad cannot accept TB-scale datasets. The monitor logs `mirror_error` for this assignment and continues to other destinations.
+- Flow: `POST /api/v2/datasets` → for each file: `PUT /api/v2/datasets/{id}/files/{filename}` → `POST /api/v2/datasets/{id}/versions`
 - Captures Dryad-assigned DOI if returned; otherwise falls back to mock DOI
 - Credentials in `destination.credentials`: `{"client_id": "...", "client_secret": "...", "base_url": "https://sandbox.datadryad.org"}`
 
 ### `SourceCoopMirror`
+source.coop datasets are addressed as `https://data.source.coop/{owner}/{product}/{filepath}`. The mirror adapter uploads files to S3 with keys structured to match this URL pattern.
+
 - S3-compatible upload via `boto3`
-- Key prefix: `{dataset.name}/{archived_at_iso}/`
-- After upload, writes a minimal STAC Item JSON to `{prefix}/stac-item.json` describing the archived assets
-- Credentials in `destination.credentials`: `{"access_key": "...", "secret_key": "...", "bucket": "...", "endpoint_url": "..."}`
+- Credentials include `owner` and `product` fields that set the key prefix: `{owner}/{product}/{archived_at_iso}/{filename}`
+- **Streaming upload:** for each file, uses `boto3` multipart upload streaming directly from the source HTTP response where possible — avoiding writing large files to local disk. The `download()` step is bypassed for source.coop destinations when the detector supports streaming; otherwise falls back to uploading from the temp file list.
+- After all files are uploaded, writes a minimal STAC Item JSON to `{owner}/{product}/{archived_at_iso}/stac-item.json` referencing each asset at its full `https://data.source.coop/...` URL
+- Credentials in `destination.credentials`: `{"access_key": "...", "secret_key": "...", "bucket": "...", "endpoint_url": "...", "owner": "...", "product": "..."}`
+- `remote_identifier` returned: `https://data.source.coop/{owner}/{product}/{archived_at_iso}/`
 
 ### Failure handling
-If `upload()` raises, the `monitor_run` outcome is set to `mirror_error` and the exception traceback is appended to `monitor_run.log`. `dataset.last_fingerprint` is NOT updated, so the next scheduled run retries.
+If `upload()` raises, the `monitor_run` outcome is set to `mirror_error` and the exception traceback is appended to `monitor_run.log`. `dataset.last_fingerprint` is NOT updated, so the next scheduled run retries. A `MirrorSizeError` is logged clearly without a traceback.
 
 ---
 
@@ -268,4 +279,4 @@ varve/
 - User accounts / full auth system
 - Automated scheduling (cron setup is left to the operator)
 - DOI/data-portal detector implementations
-- File size enforcement or chunked upload handling
+- Streaming bypass of local temp for non-S3 sources (first cut downloads to temp dir regardless)
