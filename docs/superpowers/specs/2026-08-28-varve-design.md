@@ -1,0 +1,271 @@
+# Varve — Dataset Monitoring & Archiving Service Design
+
+**Date:** 2026-08-28  
+**Status:** Approved for implementation  
+**Scope:** Prototype — full monitoring loop with real mirror integrations; DOI minting mocked
+
+---
+
+## Overview
+
+Varve monitors source datasets for changes and archives copies to one or more mirror destinations. When a change is detected, the dataset is downloaded and uploaded to each assigned mirror, a mock DOI is recorded, and the event is logged. A web UI lets users browse datasets and monitoring history; managers configure datasets, destinations, and assignments.
+
+---
+
+## Architecture
+
+```
+Browser (HTMX)
+      │
+FastAPI (Jinja2 templates + REST endpoints)
+      │
+SQLite (via SQLAlchemy)
+      │
+varve monitor (CLI script, run manually or via cron)
+    ├── Detector plugins (URL, STAC; DOI/data-portal stubbed)
+    └── Mirror adapters (Dryad, source.coop)
+```
+
+Two processes: the FastAPI web server and the `varve monitor` CLI. They share the SQLite database. The web UI can trigger a monitoring run via a "Run now" button (spawns the CLI as a subprocess, streams output via SSE).
+
+---
+
+## Data Model
+
+### `destination`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | integer PK | |
+| `name` | text | Human label |
+| `type` | text | `dryad` or `source_coop` |
+| `credentials` | text | JSON blob (encrypted at rest in production; plaintext for prototype) |
+| `enabled` | boolean | |
+| `created_at` | datetime | |
+
+### `dataset`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | integer PK | |
+| `name` | text | Human label |
+| `source_url` | text | Canonical URL or identifier |
+| `detector_type` | text | `url`, `stac`, `doi`, `data_portal` |
+| `detector_config` | text | JSON blob (extra config for detector, e.g. STAC asset keys to watch) |
+| `last_fingerprint` | text | Checksum or version hash from last successful check |
+| `last_checked_at` | datetime | |
+| `notes` | text | Manager notes |
+| `created_at` | datetime | |
+
+### `assignment`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | integer PK | |
+| `dataset_id` | FK → dataset | |
+| `destination_id` | FK → destination | |
+| `check_interval_hours` | integer | e.g. 48 for every 2 days |
+| `enabled` | boolean | |
+| `created_at` | datetime | |
+
+### `monitor_run`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | integer PK | |
+| `dataset_id` | FK → dataset | |
+| `started_at` | datetime | |
+| `finished_at` | datetime | |
+| `outcome` | text | `unchanged`, `mirrored`, `disappeared`, `mirror_error`, `detector_error` |
+| `fingerprint_before` | text | Fingerprint at start of run |
+| `fingerprint_after` | text | Fingerprint detected (may differ from before) |
+| `log` | text | Free-text run log |
+
+### `mirror_copy`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | integer PK | |
+| `monitor_run_id` | FK → monitor_run | |
+| `dataset_id` | FK → dataset | |
+| `destination_id` | FK → destination | |
+| `archived_at` | datetime | |
+| `remote_identifier` | text | Dryad dataset ID or source.coop S3 key prefix |
+| `mock_doi` | text | e.g. `10.5072/varve.{dataset_id}.{timestamp}` |
+| `source_metadata` | text | JSON snapshot of detector metadata at archive time |
+
+---
+
+## Detector Plugin System
+
+### Interface
+
+```python
+class Detector:
+    def fetch_metadata(self) -> dict       # lightweight: version, last-modified, size
+    def compute_fingerprint(self) -> str   # ETag, checksum, or version hash
+    def download(self, dest_path: Path) -> None  # stream dataset to local file
+```
+
+### `URLDetector`
+- `fetch_metadata()`: HEAD request; captures `ETag`, `Last-Modified`, `Content-Length`
+- `compute_fingerprint()`: returns `ETag` if present, else SHA-256 of a range request (first 1 MB) as a cheap probe; falls back to full download + SHA-256 if neither is available
+- `download()`: streaming GET to `dest_path`
+
+### `STACDetector`
+- `fetch_metadata()`: GET the STAC Item JSON; captures `datetime`, `updated`, asset `href`s
+- `compute_fingerprint()`: SHA-256 of the canonicalized asset `href` list + item `updated` field
+- `download()`: downloads all assets listed in `detector_config.asset_keys` (or all assets if not specified) into a local directory, then zips it
+
+### `DOIDetector`, `DataPortalDetector`
+Registered but raise `NotImplementedError`. Architecture is in place for future implementation.
+
+### Detector selection
+`dataset.detector_type` maps to a detector class via a registry dict. Instantiated with `dataset.source_url` and `dataset.detector_config`.
+
+---
+
+## Monitor CLI
+
+### Entry point
+
+```
+varve monitor run              # check all enabled datasets due for a run
+varve monitor run --id 42      # check one specific dataset
+varve monitor run --force      # ignore interval, check all enabled datasets now
+```
+
+"Due for a run" means: `last_checked_at IS NULL` OR `last_checked_at + check_interval_hours ≤ now()`.
+
+### Per-dataset flow
+
+1. Instantiate detector; call `fetch_metadata()` + `compute_fingerprint()`
+2. Compare fingerprint to `dataset.last_fingerprint`
+3. **Unchanged:** write `monitor_run` (outcome `unchanged`); update `dataset.last_checked_at`; stop
+4. **Changed or first run:**
+   a. Call `detector.download()` to a temp directory
+   b. For each active assignment: call the appropriate mirror adapter's `upload()`
+   c. Record a `mirror_copy` row per destination
+   d. Mint mock DOI: `10.5072/varve.{dataset_id}.{unix_timestamp}`; store in `mirror_copy.mock_doi`; log `IsDerivedFrom: {dataset.source_url}`
+   e. Update `dataset.last_fingerprint`, `dataset.last_checked_at`
+   f. Write `monitor_run` (outcome `mirrored`)
+5. **Source 404/410:** write `monitor_run` (outcome `disappeared`); do NOT update fingerprint; log warning
+6. **Any exception:** write `monitor_run` (outcome `detector_error` or `mirror_error`); log traceback; do NOT update fingerprint
+
+The CLI prints structured log lines (timestamp + level + message) that can be consumed by the SSE endpoint.
+
+---
+
+## Web UI
+
+**Stack:** FastAPI + Jinja2 + HTMX. No JS build step.
+
+**Manager authentication:** `VARVE_MANAGER_TOKEN` env var. Manager routes check for matching `Authorization: Bearer <token>` header or `?token=<token>` query param. No token = read-only user.
+
+### Routes
+
+| Method | Path | Access | Description |
+|---|---|---|---|
+| GET | `/` | All | Dashboard: recent runs, dataset count, last-checked summary |
+| GET | `/datasets` | All | Dataset list with status badges |
+| GET | `/datasets/{id}` | All | Dataset detail: monitoring history, mirror copies |
+| GET | `/datasets/new` | Manager | Add dataset form |
+| POST | `/datasets` | Manager | Create dataset |
+| GET | `/datasets/{id}/edit` | Manager | Edit dataset |
+| POST | `/datasets/{id}` | Manager | Update dataset |
+| GET | `/destinations` | Manager | List destinations |
+| GET | `/destinations/new` | Manager | Add destination form |
+| POST | `/destinations` | Manager | Create destination |
+| GET | `/assignments` | Manager | Dataset→destination assignment table |
+| GET | `/assignments/new` | Manager | Create assignment form |
+| POST | `/assignments` | Manager | Create assignment |
+| POST | `/monitor/trigger/{dataset_id}` | Manager | Spawn monitor run, return `run_id` |
+| GET | `/monitor/stream/{run_id}` | Manager | SSE stream of log lines for a run |
+| GET | `/monitor/status/{run_id}` | All | JSON: run outcome + finished flag (for HTMX polling) |
+| PATCH | `/assignments/{id}/toggle` | Manager | Enable/disable an assignment inline |
+
+### HTMX interactions
+- "Run now" button: POST to `/monitor/trigger/{id}`, gets `run_id`, opens SSE stream into a log panel via `hx-ext="sse"`
+- Dataset list status badges: `hx-trigger="every 30s"` partial refresh
+- Assignment table: inline enable/disable toggle via PATCH
+
+---
+
+## Mirror Adapters
+
+### Interface
+
+```python
+class Mirror:
+    def upload(self, local_path: Path, dataset: Dataset, run_metadata: dict) -> str
+    # returns remote_identifier (Dryad dataset ID or S3 key prefix)
+```
+
+### `DryadMirror`
+- Auth: OAuth2 client-credentials flow against `https://sandbox.datadryad.org` (sandbox for prototype)
+- Flow: `POST /api/v2/datasets` → `PUT /api/v2/datasets/{id}/files/{filename}` → `POST /api/v2/datasets/{id}/versions`
+- Captures Dryad-assigned DOI if returned; otherwise falls back to mock DOI
+- Credentials in `destination.credentials`: `{"client_id": "...", "client_secret": "...", "base_url": "https://sandbox.datadryad.org"}`
+
+### `SourceCoopMirror`
+- S3-compatible upload via `boto3`
+- Key prefix: `{dataset.name}/{archived_at_iso}/`
+- After upload, writes a minimal STAC Item JSON to `{prefix}/stac-item.json` describing the archived assets
+- Credentials in `destination.credentials`: `{"access_key": "...", "secret_key": "...", "bucket": "...", "endpoint_url": "..."}`
+
+### Failure handling
+If `upload()` raises, the `monitor_run` outcome is set to `mirror_error` and the exception traceback is appended to `monitor_run.log`. `dataset.last_fingerprint` is NOT updated, so the next scheduled run retries.
+
+---
+
+## Project Structure
+
+```
+varve/
+├── varve/
+│   ├── __init__.py
+│   ├── db.py             # SQLAlchemy models + session
+│   ├── cli.py            # varve monitor CLI (Click)
+│   ├── detectors/
+│   │   ├── base.py
+│   │   ├── url.py
+│   │   └── stac.py
+│   ├── mirrors/
+│   │   ├── base.py
+│   │   ├── dryad.py
+│   │   └── source_coop.py
+│   ├── web/
+│   │   ├── app.py        # FastAPI app factory
+│   │   ├── routes/
+│   │   │   ├── datasets.py
+│   │   │   ├── destinations.py
+│   │   │   ├── assignments.py
+│   │   │   └── monitor.py
+│   │   └── templates/
+│   │       ├── base.html
+│   │       ├── dashboard.html
+│   │       ├── datasets/
+│   │       └── ...
+│   └── config.py         # env var loading
+├── tests/
+│   ├── test_detectors.py
+│   ├── test_mirrors.py
+│   └── test_monitor.py
+├── pyproject.toml
+└── README.md
+```
+
+---
+
+## Testing Approach
+
+- **Detectors:** unit tests with `responses` or `pytest-httpx` to mock HTTP; test fingerprint stability and change detection logic
+- **Mirrors:** unit tests with `moto` (S3 mock for source.coop) and VCR cassettes or mocks for Dryad API
+- **Monitor CLI:** integration tests against an in-memory SQLite DB; assert `monitor_run` and `mirror_copy` rows are written correctly
+- **Web routes:** FastAPI `TestClient`; assert page renders and manager-only routes reject unauthenticated requests
+
+---
+
+## Out of Scope (Prototype)
+
+- Dataset proposal workflow (GitHub Issues integration)
+- Real DOI minting via DataCite API
+- User accounts / full auth system
+- Automated scheduling (cron setup is left to the operator)
+- DOI/data-portal detector implementations
+- File size enforcement or chunked upload handling
