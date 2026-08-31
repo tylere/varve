@@ -25,7 +25,7 @@ def make_router(holder: _RepoHolder, templates: Jinja2Templates,
 
     @router.get("/destinations/new", response_class=HTMLResponse, dependencies=[Depends(mgr)])
     async def destination_new_form(request: Request):
-        return templates.TemplateResponse(request, "destinations/form.html", {})
+        return templates.TemplateResponse(request, "destinations/form.html", {"token": manager_token})
 
     @router.post("/destinations", dependencies=[Depends(mgr)])
     async def destination_create(

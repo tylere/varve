@@ -2,7 +2,7 @@
 {% block title %}Varve — Add Assignment{% endblock %}
 {% block content %}
 <h1>Add Assignment</h1>
-<form method="post" action="/assignments">
+<form method="post" action="/assignments{% if token %}?token={{ token }}{% endif %}">
   <label>Dataset
     <select name="dataset_slug">
       {% for d in datasets %}<option value="{{ d.slug }}">{{ d.name }}</option>{% endfor %}

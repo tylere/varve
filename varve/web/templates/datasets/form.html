@@ -2,7 +2,7 @@
 {% block title %}Varve — Add Dataset{% endblock %}
 {% block content %}
 <h1>Add Dataset</h1>
-<form method="post" action="/datasets">
+<form method="post" action="/datasets{% if token %}?token={{ token }}{% endif %}">
   <label>Name <input name="name" required></label>
   <label>Source URL <input name="source_url" type="url" required></label>
   <label>Additional URLs (one per line)

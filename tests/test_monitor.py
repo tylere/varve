@@ -166,6 +166,14 @@ def test_cli_monitor_run_unknown_dataset(state_repo: Path):
     assert "not found" in result.output.lower()
 
 
+def test_force_skips_disabled_dataset(state_repo: Path):
+    repo = LocalGitRepo(state_repo)
+    ds = _make_dataset(enabled=False, last_fingerprint=None)
+    repo.write_dataset(ds)
+    result = run_dataset("ds1", repo, force=True)
+    assert result is None
+
+
 def test_cli_monitor_run_skips_disabled(state_repo: Path):
     repo = LocalGitRepo(state_repo)
     ds = _make_dataset(enabled=False, last_checked_at=None)

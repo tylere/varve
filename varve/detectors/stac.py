@@ -50,7 +50,8 @@ class STACDetector(Detector):
         paths = []
         for key, asset in assets.items():
             href = asset["href"]
-            name = urlparse(href).path.split("/")[-1] or key
+            raw_name = urlparse(href).path.split("/")[-1] or key
+            name = Path(raw_name).name.lstrip(".") or "file"
             dest = dest_dir / name
             with httpx.stream("GET", href, follow_redirects=True, timeout=120) as r:
                 r.raise_for_status()

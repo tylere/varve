@@ -15,10 +15,6 @@ from .models import (
 )
 
 
-def _ts_to_slug(ts: str) -> str:
-    """'2026-08-29T14:00:00Z' → '20260829T140000Z' (filename-safe)."""
-    return ts.replace("-", "").replace(":", "").replace(".", "")[:16] + "Z"
-
 
 class LocalGitRepo:
     def __init__(self, repo_path: Path) -> None:
@@ -168,9 +164,11 @@ class LocalGitRepo:
         records = []
         for f in sorted(d.glob("*.json"), reverse=True):
             data = json.loads(f.read_text())
+            # stem is either "{ts}-{dest_slug}" (new) or "{ts}" (legacy)
+            stem_ts = f.stem.split("-")[0] if "-" in f.stem else f.stem
             records.append(MirrorRecord(
                 dataset_slug=dataset_slug,
-                timestamp=f.stem,
+                timestamp=stem_ts,
                 destination_slug=data["destination_slug"],
                 archived_at=data["archived_at"],
                 remote_identifier=data["remote_identifier"],
@@ -259,4 +257,4 @@ class LocalGitRepo:
             "mock_doi": record.mock_doi,
             "source_metadata": record.source_metadata,
         }
-        (d / f"{record.timestamp}.json").write_text(json.dumps(data, indent=2))
+        (d / f"{record.timestamp}-{record.destination_slug}.json").write_text(json.dumps(data, indent=2))

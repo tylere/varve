@@ -14,6 +14,7 @@ from varve.web.app import _RepoHolder
 
 # In-memory store for active run log queues
 _run_queues: dict[str, asyncio.Queue] = defaultdict(asyncio.Queue)
+_tasks: set = set()
 
 
 def make_router(holder: _RepoHolder, templates: Jinja2Templates,
@@ -32,18 +33,28 @@ def make_router(holder: _RepoHolder, templates: Jinja2Templates,
         _run_queues[run_id] = queue
 
         async def _run():
-            proc = await asyncio.create_subprocess_exec(
-                sys.executable, "-m", "varve", "monitor", "run", "--id", slug, "--force",
-                env={**__import__("os").environ, "VARVE_STATE_REPO_PATH": str(holder.repo.root)},
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-            )
-            async for line in proc.stdout:
-                await queue.put({"data": line.decode().rstrip(), "event": "log"})
-            await proc.wait()
-            await queue.put({"data": "DONE", "event": "done"})
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    sys.executable, "-m", "varve", "monitor", "run", "--id", slug, "--force",
+                    env={**__import__("os").environ,
+                         "VARVE_STATE_REPO_PATH": str(holder.repo.root),
+                         "PYTHONUNBUFFERED": "1"},
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                )
+                async for line in proc.stdout:
+                    await queue.put({"data": line.decode().rstrip(), "event": "log"})
+                await proc.wait()
+                if proc.returncode != 0:
+                    await queue.put({"data": f"Process exited with code {proc.returncode}", "event": "log"})
+            except Exception as exc:
+                await queue.put({"data": f"Error: {exc}", "event": "log"})
+            finally:
+                await queue.put({"data": "DONE", "event": "done"})
+                _tasks.discard(asyncio.current_task())
 
-        asyncio.create_task(_run())
+        t = asyncio.create_task(_run())
+        _tasks.add(t)
         return {"run_id": run_id}
 
     @router.get("/monitor/stream/{run_id}", dependencies=[Depends(mgr)])

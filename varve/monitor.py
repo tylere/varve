@@ -45,6 +45,9 @@ def run_dataset(slug: str, repo: LocalGitRepo, *, force: bool = False) -> RunRec
     if dataset is None:
         raise ValueError(f"Dataset '{slug}' not found in state repo")
 
+    if not dataset.enabled:
+        return None
+
     assignments = repo.get_assignments_for_dataset(slug)
 
     if not force and not is_due(dataset, assignments):
@@ -64,6 +67,7 @@ def run_dataset(slug: str, repo: LocalGitRepo, *, force: bool = False) -> RunRec
     # ── detect ───────────────────────────────────────────────────────────────
     try:
         fingerprint_after = detector.compute_fingerprint()
+        source_metadata = detector.fetch_metadata()
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code in (404, 410):
             _log(f"Dataset disappeared (HTTP {exc.response.status_code})")
@@ -150,8 +154,8 @@ def run_dataset(slug: str, repo: LocalGitRepo, *, force: bool = False) -> RunRec
             try:
                 creds_json = os.environ[destination.credentials_env]
                 credentials = json.loads(creds_json)
-            except KeyError:
-                _log(f"SKIP {destination.slug}: env var {destination.credentials_env!r} not set")
+            except (KeyError, json.JSONDecodeError) as exc:
+                _log(f"SKIP {destination.slug}: env var {destination.credentials_env!r} not set or invalid JSON: {exc}")
                 continue
 
             archived_at = _now_iso()
@@ -179,7 +183,7 @@ def run_dataset(slug: str, repo: LocalGitRepo, *, force: bool = False) -> RunRec
                 archived_at=archived_at,
                 remote_identifier=remote_id,
                 mock_doi=mock_doi,
-                source_metadata=detector.fetch_metadata(),
+                source_metadata=source_metadata,
             )
             repo.write_mirror(mirror_record)
             any_mirrored = True
@@ -205,6 +209,8 @@ def run_all(repo: LocalGitRepo, *, force: bool = False) -> list[RunRecord]:
     repo.pull()
     results = []
     for dataset in repo.list_datasets():
+        if not dataset.enabled:
+            continue
         assignments = repo.get_assignments_for_dataset(dataset.slug)
         if force or is_due(dataset, assignments):
             run = run_dataset(dataset.slug, repo, force=force)

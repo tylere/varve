@@ -4,6 +4,7 @@ import hashlib
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+
 import httpx
 
 from .base import Detector
@@ -12,8 +13,12 @@ from .base import Detector
 def _filename_from_url(url: str, response: httpx.Response) -> str:
     cd = response.headers.get("content-disposition", "")
     if "filename=" in cd:
-        return cd.split("filename=")[-1].strip().strip('"')
-    return unquote(urlparse(url).path.rstrip("/").split("/")[-1]) or "download"
+        name = cd.split("filename=")[-1].strip().strip('"')
+    else:
+        name = unquote(urlparse(url).path.rstrip("/").split("/")[-1]) or "download"
+    name = Path(name).name  # strip any path components
+    name = name.lstrip(".") or "file"  # strip leading dots, fallback
+    return name
 
 
 def _collection_fingerprint(entries: list[tuple[str, str]]) -> str:
@@ -74,6 +79,8 @@ class URLDetector(Detector):
                 r.raise_for_status()
                 name = _filename_from_url(url, r)
                 dest = dest_dir / name
+                if not dest.resolve().is_relative_to(dest_dir.resolve()):
+                    dest = dest_dir / hashlib.sha256(url.encode()).hexdigest()[:16]
                 with dest.open("wb") as fh:
                     for chunk in r.iter_bytes(chunk_size=65536):
                         fh.write(chunk)

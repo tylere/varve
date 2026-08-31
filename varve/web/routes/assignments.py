@@ -32,7 +32,7 @@ def make_router(holder: _RepoHolder, templates: Jinja2Templates,
         datasets = holder.get().list_datasets()
         destinations = holder.get().list_destinations()
         return templates.TemplateResponse(request, "assignments/form.html", {
-            "datasets": datasets, "destinations": destinations,
+            "datasets": datasets, "destinations": destinations, "token": manager_token,
         })
 
     @router.post("/assignments", dependencies=[Depends(mgr)])

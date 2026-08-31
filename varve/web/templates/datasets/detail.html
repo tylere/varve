@@ -5,13 +5,13 @@
 {% if request.headers.get("authorization") or request.query_params.get("token") %}
 <div id="run-panel">
   <button
-    hx-post="/monitor/trigger/{{ dataset.slug }}"
+    hx-post="/monitor/trigger/{{ dataset.slug }}{% if token %}?token={{ token }}{% endif %}"
     hx-target="#log-output"
     hx-swap="innerHTML"
     hx-on::after-request="
       const runId = JSON.parse(event.detail.xhr.responseText).run_id;
       document.getElementById('log-output').setAttribute('hx-ext', 'sse');
-      document.getElementById('log-output').setAttribute('sse-connect', '/monitor/stream/' + runId);
+      document.getElementById('log-output').setAttribute('sse-connect', '/monitor/stream/' + runId + '?token={{ token | default('') }}');
       htmx.process(document.getElementById('log-output'));
     "
   >Run now</button>

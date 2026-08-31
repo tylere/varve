@@ -40,7 +40,7 @@ def make_router(holder: _RepoHolder, templates: Jinja2Templates,
 
     @router.get("/datasets/new", response_class=HTMLResponse, dependencies=[Depends(mgr)])
     async def dataset_new_form(request: Request):
-        return templates.TemplateResponse(request, "datasets/form.html", {"dataset": None})
+        return templates.TemplateResponse(request, "datasets/form.html", {"dataset": None, "token": manager_token})
 
     @router.get("/datasets/{slug}", response_class=HTMLResponse)
     async def dataset_detail(request: Request, slug: str):
@@ -51,7 +51,7 @@ def make_router(holder: _RepoHolder, templates: Jinja2Templates,
         runs = repo.list_runs(slug)
         mirrors = repo.list_mirrors(slug)
         return templates.TemplateResponse(request, "datasets/detail.html", {
-            "dataset": dataset, "runs": runs, "mirrors": mirrors,
+            "dataset": dataset, "runs": runs, "mirrors": mirrors, "token": manager_token,
         })
 
     @router.post("/datasets", dependencies=[Depends(mgr)])
