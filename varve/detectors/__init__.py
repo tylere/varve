@@ -3,6 +3,7 @@ from pathlib import Path
 from varve.state.models import DatasetRecord
 from .base import Detector
 from .url import URLDetector
+from .stac import STACDetector
 
 
 class _NotImplementedDetector(Detector):
@@ -17,7 +18,10 @@ class _NotImplementedDetector(Detector):
 
 
 def get_detector(dataset: DatasetRecord) -> Detector:
-    if dataset.detector_type == "url":
-        return URLDetector(dataset.source_url, dataset.source_urls, dataset.detector_config)
-    # stac added in next task
-    return _NotImplementedDetector(dataset.detector_type)
+    match dataset.detector_type:
+        case "url":
+            return URLDetector(dataset.source_url, dataset.source_urls, dataset.detector_config)
+        case "stac":
+            return STACDetector(dataset.source_url, dataset.source_urls, dataset.detector_config)
+        case _:
+            return _NotImplementedDetector(dataset.detector_type)
