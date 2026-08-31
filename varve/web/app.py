@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 from pathlib import Path
 
@@ -22,15 +23,18 @@ class _RepoHolder:
     def __init__(self, repo_path: Path) -> None:
         self.repo = LocalGitRepo(repo_path)
         self._last_pull: float = 0.0
+        self._lock = threading.Lock()
 
     def get(self) -> LocalGitRepo:
         now = time.monotonic()
         if now - self._last_pull > config.PULL_INTERVAL_SECONDS:
-            try:
-                self.repo.pull()
-            except Exception:
-                pass
-            self._last_pull = now
+            with self._lock:
+                if time.monotonic() - self._last_pull > config.PULL_INTERVAL_SECONDS:
+                    try:
+                        self.repo.pull()
+                    except Exception:
+                        pass
+                    self._last_pull = time.monotonic()
         return self.repo
 
 

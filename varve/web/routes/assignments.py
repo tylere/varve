@@ -13,9 +13,10 @@ def make_router(holder: _RepoHolder, templates: Jinja2Templates,
 
     @router.get("/assignments", response_class=HTMLResponse, dependencies=[Depends(mgr)])
     async def assignment_list(request: Request):
-        assignments = holder.get().list_assignments()
-        datasets = {d.slug: d for d in holder.get().list_datasets()}
-        destinations = {d.slug: d for d in holder.get().list_destinations()}
+        repo = holder.get()
+        assignments = repo.list_assignments()
+        datasets = {d.slug: d for d in repo.list_datasets()}
+        destinations = {d.slug: d for d in repo.list_destinations()}
         return templates.TemplateResponse(request, "assignments/list.html", {
             "assignments": assignments,
             "datasets": datasets, "destinations": destinations,
