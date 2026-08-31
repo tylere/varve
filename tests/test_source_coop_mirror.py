@@ -1,6 +1,5 @@
 import json
 import boto3
-import pytest
 from moto import mock_aws
 from pathlib import Path
 from varve.mirrors.source_coop import SourceCoopMirror
@@ -44,6 +43,8 @@ def test_upload_creates_s3_objects(tmp_path: Path):
     assert any("meta.xml" in k for k in objects)
     assert any("stac-item.json" in k for k in objects)
     assert remote_id.startswith("https://data.source.coop/my-org/noaa-sst/")
+    # verify timestamp prefix is single-Z (no double-Z from _ts_to_prefix)
+    assert "ZZ" not in remote_id
 
 
 @mock_aws

@@ -10,7 +10,8 @@ from .base import Mirror
 
 
 def _ts_to_prefix(archived_at: str) -> str:
-    return archived_at.replace("-", "").replace(":", "").replace(".", "")[:16] + "Z"
+    cleaned = archived_at.replace("-", "").replace(":", "").replace(".", "").rstrip("Z")
+    return cleaned[:15] + "Z"
 
 
 class SourceCoopMirror(Mirror):
@@ -44,7 +45,7 @@ class SourceCoopMirror(Mirror):
             "id": f"{dataset.slug}-{ts}",
             "properties": {"datetime": run_metadata["archived_at"]},
             "geometry": None,
-            "bbox": [],
+            "bbox": None,
             "links": [
                 {"rel": "derived_from", "href": dataset.source_url}
             ],
