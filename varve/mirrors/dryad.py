@@ -58,12 +58,12 @@ class DryadMirror(Mirror):
         dataset_id = body["id"]
         assigned_doi: str | None = body.get("identifier")
 
-        # Upload each file
+        # Upload each file — pass the file object directly to avoid buffering up to 10 GB
         for f in files:
             with f.open("rb") as fh:
                 r = httpx.put(
                     f"{self.base_url}/api/v2/datasets/{dataset_id}/files/{f.name}",
-                    content=fh.read(),
+                    content=fh,
                     headers={**headers, "Content-Type": "application/octet-stream"},
                     timeout=300,
                 )
