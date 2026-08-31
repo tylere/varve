@@ -71,11 +71,14 @@ source_urls:                                     # optional: explicit file URLs 
   - "https://example.org/dataset/sst/file2.nc"
 detector_type: url          # url | stac | doi | data_portal
 detector_config: {}         # detector-specific options
+enabled: false              # false = draft; true = active and eligible for monitoring
 notes: ""
 created_at: "2026-08-29T00:00:00Z"
 ```
 
 `source_urls` is optional. When absent, the dataset is treated as a single file at `source_url`. When present, each URL in the list is monitored and mirrored individually. Detectors that discover assets dynamically (STAC, DOI) ignore `source_urls` entirely.
+
+New datasets are created with `enabled: false` (draft). A manager explicitly sets `enabled: true` to activate monitoring. The monitor CLI skips any dataset where `enabled: false`, regardless of assignments.
 
 ### `datasets/{slug}/state.yaml`
 ```yaml
@@ -238,7 +241,7 @@ varve monitor run --id 42      # check one specific dataset
 varve monitor run --force      # ignore interval, check all enabled datasets now
 ```
 
-"Due for a run" means: `last_checked_at IS NULL` OR `last_checked_at + check_interval_hours ≤ now()`.
+"Due for a run" means: `dataset.enabled = true` AND (`last_checked_at IS NULL` OR `last_checked_at + check_interval_hours ≤ now()`).
 
 ### Per-dataset flow
 
@@ -290,6 +293,7 @@ The CLI prints structured log lines (timestamp + level + message) that can be co
 | POST | `/monitor/trigger/{dataset_id}` | Manager | Spawn monitor run, return `run_id` |
 | GET | `/monitor/stream/{run_id}` | Manager | SSE stream of log lines for a run |
 | GET | `/monitor/status/{run_id}` | All | JSON: run outcome + finished flag (for HTMX polling) |
+| PATCH | `/datasets/{id}/toggle` | Manager | Enable/disable a dataset inline (draft → active) |
 | PATCH | `/assignments/{id}/toggle` | Manager | Enable/disable an assignment inline |
 
 ### HTMX interactions
