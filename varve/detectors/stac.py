@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -53,6 +54,8 @@ class STACDetector(Detector):
             raw_name = urlparse(href).path.split("/")[-1] or key
             name = Path(raw_name).name.lstrip(".") or "file"
             dest = dest_dir / name
+            if not dest.resolve().is_relative_to(dest_dir.resolve()):
+                dest = dest_dir / hashlib.sha256(href.encode()).hexdigest()[:16]
             with httpx.stream("GET", href, follow_redirects=True, timeout=120) as r:
                 r.raise_for_status()
                 with dest.open("wb") as fh:
