@@ -6,8 +6,8 @@ from varve.mirrors.source_coop import SourceCoopMirror
 from varve.state.models import DatasetRecord
 
 CREDS = {
-    "access_key": "test",
-    "secret_key": "test",
+    "aws_access_key_id": "test",
+    "aws_secret_access_key": "test",
     "bucket": "test-bucket",
     "endpoint_url": None,
     "owner": "my-org",

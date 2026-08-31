@@ -20,9 +20,13 @@ class SourceCoopMirror(Mirror):
         self.product = credentials["product"]
         self.bucket = credentials["bucket"]
         kwargs: dict = {
-            "aws_access_key_id": credentials["access_key"],
-            "aws_secret_access_key": credentials["secret_key"],
+            "aws_access_key_id": credentials["aws_access_key_id"],
+            "aws_secret_access_key": credentials["aws_secret_access_key"],
         }
+        if credentials.get("aws_session_token"):
+            kwargs["aws_session_token"] = credentials["aws_session_token"]
+        if credentials.get("region_name"):
+            kwargs["region_name"] = credentials["region_name"]
         if credentials.get("endpoint_url"):
             kwargs["endpoint_url"] = credentials["endpoint_url"]
         self.s3 = boto3.client("s3", **kwargs)

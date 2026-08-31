@@ -50,16 +50,18 @@ Create the credentials JSON — Varve needs your access key, the S3 bucket name,
 
 ```json
 {
-  "access_key": "your-access-key-id",
-  "secret_key": "your-secret-access-key",
+  "aws_access_key_id": "your-access-key-id",
+  "aws_secret_access_key": "your-secret-access-key",
+  "aws_session_token": "your-session-token",
+  "region_name": "us-east-1",
+  "endpoint_url": "https://data.source.coop",
   "bucket": "your-bucket-name",
   "owner": "your-username",
-  "product": "your-product-slug",
-  "endpoint_url": "https://data.source.coop"
+  "product": "your-product-slug"
 }
 ```
 
-The `owner` and `product` fields control the public URL path: archived files appear at `https://data.source.coop/{owner}/{product}/{timestamp}/`.
+The credential fields (`aws_access_key_id`, `aws_secret_access_key`, `aws_session_token`) match the format returned by the [source-coop CLI](https://github.com/source-cooperative/source-coop-cli) (`source-coop creds`). `aws_session_token` and `region_name` are optional. The `owner` and `product` fields control the public URL path: archived files appear at `https://data.source.coop/{owner}/{product}/{timestamp}/`.
 
 Add this JSON as a GitHub Actions secret named `VARVE_SC_CREDENTIALS` under **Settings → Secrets and variables → Actions**.
 
