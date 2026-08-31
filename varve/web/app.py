@@ -51,9 +51,10 @@ def create_app(repo_path: Path, manager_token: str | None = None) -> FastAPI:
     app.state.manager_token = manager_token
     app.state.templates = templates
 
-    from varve.web.routes import datasets, destinations, assignments
+    from varve.web.routes import datasets, destinations, assignments, monitor
     app.include_router(datasets.make_router(holder, templates, manager_token))
     app.include_router(destinations.make_router(holder, templates, manager_token))
     app.include_router(assignments.make_router(holder, templates, manager_token))
+    app.include_router(monitor.make_router(holder, templates, manager_token))
 
     return app

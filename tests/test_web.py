@@ -99,3 +99,35 @@ def test_toggle_dataset(state_repo: Path):
     r = c.patch("/datasets/t1/toggle", headers={"Authorization": "Bearer secret"})
     assert r.status_code == 200
     assert repo.get_dataset("t1").enabled is True
+
+
+def test_trigger_requires_manager(client_with_dataset: TestClient):
+    r = client_with_dataset.post("/monitor/trigger/noaa-sst")
+    assert r.status_code == 403
+
+
+def test_trigger_unknown_dataset(state_repo: Path):
+    app = create_app(state_repo, manager_token="secret")
+    c = TestClient(app)
+    r = c.post("/monitor/trigger/nonexistent",
+               headers={"Authorization": "Bearer secret"})
+    assert r.status_code == 404
+
+
+def test_trigger_returns_run_id(state_repo: Path):
+    app = create_app(state_repo, manager_token="secret")
+    c = TestClient(app)
+    from varve.state.repo import LocalGitRepo
+    from varve.state.models import DatasetRecord
+    repo = LocalGitRepo(state_repo)
+    repo.write_dataset(DatasetRecord(
+        slug="noaa-sst", name="NOAA SST", source_url="https://x.org",
+        source_urls=[], detector_type="url", detector_config={},
+        enabled=True, notes="", created_at="2026-08-29T00:00:00Z",
+        last_fingerprint=None, last_checked_at=None,
+    ))
+    r = c.post("/monitor/trigger/noaa-sst",
+               headers={"Authorization": "Bearer secret"})
+    assert r.status_code == 200
+    body = r.json()
+    assert "run_id" in body

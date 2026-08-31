@@ -1,0 +1,15 @@
+monitor:
+  image: python:3.11
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+  before_script:
+    - pip install uv
+    - uv tool install varve
+    - git config user.email "varve-bot@gitlab.example.com"
+    - git config user.name "Varve Bot"
+    - git remote set-url origin "https://oauth2:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+  script:
+    - varve monitor run
+  variables:
+    VARVE_STATE_REPO_PATH: "."
