@@ -34,6 +34,33 @@ def test_fingerprint_collection_stable(httpx_mock: HTTPXMock):
     assert det.compute_fingerprint() == fp1
 
 
+def test_fingerprint_collection_order_independent(httpx_mock: HTTPXMock):
+    # [a, b] and [b, a] must produce the same fingerprint
+    for url, etag in [
+        ("https://example.org/a.csv", '"aaa"'),
+        ("https://example.org/b.csv", '"bbb"'),
+    ]:
+        httpx_mock.add_response(method="HEAD", url=url, headers={"ETag": etag})
+    det_ab = URLDetector(
+        "https://example.org/",
+        ["https://example.org/a.csv", "https://example.org/b.csv"],
+        {},
+    )
+    fp_ab = det_ab.compute_fingerprint()
+
+    for url, etag in [
+        ("https://example.org/b.csv", '"bbb"'),
+        ("https://example.org/a.csv", '"aaa"'),
+    ]:
+        httpx_mock.add_response(method="HEAD", url=url, headers={"ETag": etag})
+    det_ba = URLDetector(
+        "https://example.org/",
+        ["https://example.org/b.csv", "https://example.org/a.csv"],
+        {},
+    )
+    assert det_ba.compute_fingerprint() == fp_ab
+
+
 def test_download_single_file(httpx_mock: HTTPXMock, tmp_path: Path):
     httpx_mock.add_response(
         url="https://example.org/data.csv",
