@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Varve — Destinations{% endblock %}
+{% block content %}
+<h1>Destinations</h1>
+<table>
+  <thead><tr><th>Name</th><th>Type</th><th>Enabled</th></tr></thead>
+  <tbody>
+  {% for d in destinations %}
+    <tr><td>{{ d.name }}</td><td>{{ d.type }}</td><td>{{ d.enabled }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

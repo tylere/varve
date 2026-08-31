@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Varve — Datasets{% endblock %}
+{% block content %}
+<h1>Datasets</h1>
+<table>
+  <thead><tr><th>Name</th><th>Type</th><th>Status</th><th>Last Checked</th></tr></thead>
+  <tbody>
+  {% for ds in datasets %}
+    <tr>
+      <td><a href="/datasets/{{ ds.slug }}">{{ ds.name }}</a></td>
+      <td>{{ ds.detector_type }}</td>
+      <td>{% if ds.enabled %}active{% else %}draft{% endif %}</td>
+      <td>{{ ds.last_checked_at or "never" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

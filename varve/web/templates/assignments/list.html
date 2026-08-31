@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Varve — Assignments{% endblock %}
+{% block content %}
+<h1>Assignments</h1>
+<table>
+  <thead><tr><th>Dataset</th><th>Destination</th><th>Interval (h)</th><th>Enabled</th></tr></thead>
+  <tbody>
+  {% for a in assignments %}
+    <tr>
+      <td>{{ datasets[a.dataset_slug].name if a.dataset_slug in datasets else a.dataset_slug }}</td>
+      <td>{{ destinations[a.destination_slug].name if a.destination_slug in destinations else a.destination_slug }}</td>
+      <td>{{ a.check_interval_hours }}</td>
+      <td>{{ a.enabled }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
