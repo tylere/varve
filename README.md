@@ -42,7 +42,7 @@ The workflow runs every 6 hours and can also be triggered manually from the Acti
 
 Varve supports two archive destinations. You can configure one or both.
 
-### source.coop
+#### source.coop
 
 source.coop provides S3-compatible storage. You'll need an account and a product (repository) created at [source.coop](https://source.coop).
 
@@ -73,7 +73,7 @@ credentials_env: VARVE_SC_CREDENTIALS
 enabled: true
 ```
 
-### Dryad
+#### Dryad
 
 Dryad requires OAuth2 client credentials. Register an application in your [Dryad account settings](https://datadryad.org/stash/user_account) to get a client ID and secret. For testing, use the Dryad sandbox at `https://sandbox.datadryad.org`.
 
@@ -99,7 +99,7 @@ credentials_env: VARVE_DRYAD_CREDENTIALS
 enabled: true
 ```
 
-### Assigning destinations to datasets
+#### Assigning destinations to datasets
 
 Create `assignments/{dataset-slug}-{destination-slug}/config.yaml` to connect a dataset to a destination:
 
