@@ -65,12 +65,17 @@ state-repo/
 ### `datasets/{slug}/config.yaml`
 ```yaml
 name: "NOAA Sea Surface Temperature"
-source_url: "https://example.org/dataset/sst"
+source_url: "https://example.org/dataset/sst"   # canonical identifier; used for display and IsDerivedFrom
+source_urls:                                     # optional: explicit file URLs for url-detector collections
+  - "https://example.org/dataset/sst/file1.nc"
+  - "https://example.org/dataset/sst/file2.nc"
 detector_type: url          # url | stac | doi | data_portal
 detector_config: {}         # detector-specific options
 notes: ""
 created_at: "2026-08-29T00:00:00Z"
 ```
+
+`source_urls` is optional. When absent, the dataset is treated as a single file at `source_url`. When present, each URL in the list is monitored and mirrored individually. Detectors that discover assets dynamically (STAC, DOI) ignore `source_urls` entirely.
 
 ### `datasets/{slug}/state.yaml`
 ```yaml
@@ -204,9 +209,11 @@ class Detector:
 **Fingerprinting collections:** SHA-256 of the sorted `[(filename, etag_or_size), ...]` pairs. Stable across runs when the collection is unchanged; changes when any file is added, removed, or modified.
 
 ### `URLDetector`
-- `fetch_metadata()`: HEAD request; captures `ETag`, `Last-Modified`, `Content-Length`
-- `compute_fingerprint()`: returns `ETag` if present; else SHA-256 of the first 1 MB via range request as a cheap probe; falls back to full-download SHA-256 only if neither is available
-- `download()`: streaming GET into `dest_dir/{filename}` (filename inferred from URL or `Content-Disposition`); returns `[dest_dir/filename]`
+Instantiated with the full dataset record. Resolves the URL list as: `source_urls` if present, else `[source_url]`.
+
+- `fetch_metadata()`: HEAD request for each URL; captures `ETag`, `Last-Modified`, `Content-Length` per URL
+- `compute_fingerprint()`: for a single URL, returns its `ETag` if present, else SHA-256 of the first 1 MB via range request, else full-download SHA-256; for a collection, uses the collection fingerprint (SHA-256 of sorted `[(filename, etag_or_size), ...]`)
+- `download()`: streaming GET for each URL into `dest_dir/{filename}` (filename inferred from URL path or `Content-Disposition`); returns list of downloaded paths
 
 ### `STACDetector`
 - `fetch_metadata()`: GET the STAC Item JSON; captures `datetime`, `updated`, asset `href`s and their sizes
