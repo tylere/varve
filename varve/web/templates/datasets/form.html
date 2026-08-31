@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Varve — Add Dataset{% endblock %}
+{% block content %}
+<h1>Add Dataset</h1>
+<form method="post" action="/datasets">
+  <label>Name <input name="name" required></label>
+  <label>Source URL <input name="source_url" type="url" required></label>
+  <label>Additional URLs (one per line)
+    <textarea name="source_urls_text" rows="4" placeholder="https://..."></textarea>
+  </label>
+  <label>Detector type
+    <select name="detector_type">
+      <option value="url">url</option>
+      <option value="stac">stac</option>
+    </select>
+  </label>
+  <label>Notes <textarea name="notes" rows="3"></textarea></label>
+  <button type="submit">Save (draft)</button>
+</form>
+{% endblock %}
