@@ -6,12 +6,14 @@ from unittest.mock import patch, MagicMock
 from datetime import datetime, timezone, timedelta
 
 import httpx
+from click.testing import CliRunner
 
 from varve.state.repo import LocalGitRepo
 from varve.state.models import (
     DatasetRecord, DestinationRecord, AssignmentRecord,
 )
 from varve.monitor import is_due, run_dataset
+from varve.cli import cli
 
 
 def _make_dataset(**kwargs) -> DatasetRecord:
@@ -154,3 +156,22 @@ def test_run_dataset_disappeared(state_repo: Path):
     updated = repo.get_dataset("ds1")
     assert updated.last_fingerprint == "fp1"
     assert updated.last_checked_at is None
+
+
+def test_cli_monitor_run_unknown_dataset(state_repo: Path):
+    runner = CliRunner()
+    result = runner.invoke(cli, ["monitor", "run", "--id", "nonexistent"],
+                           env={"VARVE_STATE_REPO_PATH": str(state_repo)})
+    assert result.exit_code != 0
+    assert "not found" in result.output.lower()
+
+
+def test_cli_monitor_run_skips_disabled(state_repo: Path):
+    repo = LocalGitRepo(state_repo)
+    ds = _make_dataset(enabled=False, last_checked_at=None)
+    repo.write_dataset(ds)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["monitor", "run"],
+                           env={"VARVE_STATE_REPO_PATH": str(state_repo)})
+    assert result.exit_code == 0
+    assert repo.list_runs("ds1") == []
