@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -36,6 +35,7 @@ class STACDetector(Detector):
         for key, asset in assets.items():
             href = asset["href"]
             r = httpx.head(href, follow_redirects=True, timeout=30)
+            r.raise_for_status()
             val = r.headers.get("etag") or r.headers.get("content-length", "0")
             name = urlparse(href).path.split("/")[-1] or key
             entries.append((name, val))
