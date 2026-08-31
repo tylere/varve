@@ -1,4 +1,3 @@
-import sys
 import os
 import click
 from pathlib import Path
@@ -29,8 +28,7 @@ def monitor_run(slug: str | None, force: bool) -> None:
     if slug:
         dataset = repo.get_dataset(slug)
         if dataset is None:
-            click.echo(f"Error: dataset '{slug}' not found in state repo", err=True)
-            sys.exit(1)
+            raise click.ClickException(f"dataset '{slug}' not found in state repo")
         run = run_dataset(slug, repo, force=force)
         if run is None:
             click.echo(f"Skipped {slug} — not due for a run (use --force to override)")
