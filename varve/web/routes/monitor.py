@@ -1,20 +1,16 @@
 from __future__ import annotations
 
 import asyncio
-import subprocess
 import sys
 import uuid
 from collections import defaultdict
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sse_starlette.sse import EventSourceResponse
 
 from varve.web.auth import make_require_manager
 from varve.web.app import _RepoHolder
-import varve.config as config
 
 # In-memory store for active run log queues
 _run_queues: dict[str, asyncio.Queue] = defaultdict(asyncio.Queue)
