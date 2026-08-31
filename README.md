@@ -38,16 +38,80 @@ git push
 
 The workflow runs every 6 hours and can also be triggered manually from the Actions tab.
 
-### 3. Add credential secrets
+### 3. Configure archive destinations
 
-For each archive destination you plan to use, add a repository secret under **Settings → Secrets and variables → Actions**:
+Varve supports two archive destinations. You can configure one or both.
 
-| Secret name | Value |
-|---|---|
-| `VARVE_DRYAD_CREDENTIALS` | JSON: `{"client_id": "...", "client_secret": "..."}` |
-| `VARVE_SC_CREDENTIALS` | JSON: `{"aws_access_key_id": "...", "aws_secret_access_key": "...", "owner": "...", "product": "..."}` |
+#### source.coop
 
-Only add secrets for destinations you actually configure. Unused secrets are ignored.
+source.coop provides S3-compatible storage. You'll need an account and a product (repository) created at [source.coop](https://source.coop).
+
+Create the credentials JSON — Varve needs your access key, the S3 bucket name, your username (`owner`), and the product slug:
+
+```json
+{
+  "access_key": "your-access-key-id",
+  "secret_key": "your-secret-access-key",
+  "bucket": "your-bucket-name",
+  "owner": "your-username",
+  "product": "your-product-slug",
+  "endpoint_url": "https://data.source.coop"
+}
+```
+
+The `owner` and `product` fields control the public URL path: archived files appear at `https://data.source.coop/{owner}/{product}/{timestamp}/`.
+
+Add this JSON as a GitHub Actions secret named `VARVE_SC_CREDENTIALS` under **Settings → Secrets and variables → Actions**.
+
+Then register the destination in the state repo. Create `destinations/source-coop/config.yaml`:
+
+```yaml
+slug: source-coop
+name: source.coop
+type: source_coop
+credentials_env: VARVE_SC_CREDENTIALS
+enabled: true
+```
+
+#### Dryad
+
+Dryad requires OAuth2 client credentials. Register an application in your [Dryad account settings](https://datadryad.org/stash/user_account) to get a client ID and secret. For testing, use the Dryad sandbox at `https://sandbox.datadryad.org`.
+
+```json
+{
+  "base_url": "https://datadryad.org",
+  "client_id": "your-client-id",
+  "client_secret": "your-client-secret"
+}
+```
+
+Use `"base_url": "https://sandbox.datadryad.org"` for testing. Dryad has a 10 GB per-dataset limit — datasets exceeding this are skipped for Dryad but still mirrored to other destinations.
+
+Add this JSON as a GitHub Actions secret named `VARVE_DRYAD_CREDENTIALS`.
+
+Then create `destinations/dryad/config.yaml`:
+
+```yaml
+slug: dryad
+name: Dryad
+type: dryad
+credentials_env: VARVE_DRYAD_CREDENTIALS
+enabled: true
+```
+
+#### Assigning destinations to datasets
+
+Create `assignments/{dataset-slug}-{destination-slug}/config.yaml` to connect a dataset to a destination:
+
+```yaml
+slug: my-dataset-source-coop
+dataset_slug: my-dataset
+destination_slug: source-coop
+check_interval_hours: 24
+enabled: true
+```
+
+Commit the destination and assignment configs and push. Varve will archive to the configured destinations the next time it detects a change.
 
 ### 4. Install varve and configure datasets
 
