@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from urllib.parse import urlparse
 
 import boto3
 
@@ -14,11 +15,44 @@ def _ts_to_prefix(archived_at: str) -> str:
     return cleaned[:15] + "Z"
 
 
+def parse_source_coop_url(url: str) -> dict:
+    """Extract owner, product, and (if available) bucket from a source.coop URL or S3 URI.
+
+    Supported formats:
+      s3://{bucket}/{owner}/{product}/...
+      https://source.coop/{owner}/{product}/...
+      https://data.source.coop/{owner}/{product}/...
+
+    Returns a dict with keys 'owner', 'product', and optionally 'bucket'.
+    Raises ValueError if the URL cannot be parsed.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme == "s3":
+        bucket = parsed.netloc
+        parts = parsed.path.lstrip("/").split("/")
+        if len(parts) < 2:
+            raise ValueError(f"S3 URI must have at least owner and product: {url}")
+        return {"bucket": bucket, "owner": parts[0], "product": parts[1]}
+    elif parsed.scheme in ("http", "https"):
+        parts = parsed.path.lstrip("/").split("/")
+        if len(parts) < 2:
+            raise ValueError(f"source.coop URL must include owner and product: {url}")
+        return {"owner": parts[0], "product": parts[1]}
+    else:
+        raise ValueError(f"Unrecognised URL scheme '{parsed.scheme}': {url}")
+
+
 class SourceCoopMirror(Mirror):
     def __init__(self, credentials: dict) -> None:
-        self.owner = credentials["owner"]
-        self.product = credentials["product"]
-        self.bucket = credentials["bucket"]
+        if "repository_url" in credentials:
+            parsed = parse_source_coop_url(credentials["repository_url"])
+            self.owner = parsed["owner"]
+            self.product = parsed["product"]
+            self.bucket = parsed.get("bucket") or credentials["bucket"]
+        else:
+            self.owner = credentials["owner"]
+            self.product = credentials["product"]
+            self.bucket = credentials["bucket"]
         kwargs: dict = {
             "aws_access_key_id": credentials["aws_access_key_id"],
             "aws_secret_access_key": credentials["aws_secret_access_key"],

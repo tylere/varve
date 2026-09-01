@@ -61,7 +61,25 @@ Create the credentials JSON — Varve needs your access key, the S3 bucket name,
 }
 ```
 
-The credential fields (`aws_access_key_id`, `aws_secret_access_key`, `aws_session_token`) match the format returned by the [source-coop CLI](https://github.com/source-cooperative/source-coop-cli) (`source-coop creds`). `aws_session_token` and `region_name` are optional. The `owner` and `product` fields control the public URL path: archived files appear at `https://data.source.coop/{owner}/{product}/{timestamp}/`.
+The credential fields (`aws_access_key_id`, `aws_secret_access_key`, `aws_session_token`) match the format returned by the [source-coop CLI](https://github.com/source-cooperative/source-coop-cli) (`source-coop creds`). `aws_session_token` and `region_name` are optional.
+
+Instead of specifying `owner`, `product`, and `bucket` individually, you can provide a `repository_url` and varve will parse them automatically:
+
+```json
+{
+  "aws_access_key_id": "...",
+  "aws_secret_access_key": "...",
+  "aws_session_token": "...",
+  "repository_url": "s3://us-west-2.opendata.source.coop/tyler/varve-data-mirror-test"
+}
+```
+
+Supported URL formats:
+- `s3://{bucket}/{owner}/{product}/...` — bucket, owner, and product all extracted
+- `https://source.coop/{owner}/{product}/...` — owner and product extracted; `bucket` must still be provided separately
+- `https://data.source.coop/{owner}/{product}/...` — same as above
+
+Archived files appear at `https://data.source.coop/{owner}/{product}/{timestamp}/`.
 
 Add this JSON as a GitHub Actions secret named `VARVE_SC_CREDENTIALS` under **Settings → Secrets and variables → Actions**.
 

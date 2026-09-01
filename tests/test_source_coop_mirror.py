@@ -1,9 +1,50 @@
 import json
+import pytest
 import boto3
 from moto import mock_aws
 from pathlib import Path
-from varve.mirrors.source_coop import SourceCoopMirror
+from varve.mirrors.source_coop import SourceCoopMirror, parse_source_coop_url
 from varve.state.models import DatasetRecord
+
+
+def test_parse_s3_uri():
+    result = parse_source_coop_url(
+        "s3://us-west-2.opendata.source.coop/tyler/test-tiff-not-cloud-optimized/Victoria.tif"
+    )
+    assert result == {
+        "bucket": "us-west-2.opendata.source.coop",
+        "owner": "tyler",
+        "product": "test-tiff-not-cloud-optimized",
+    }
+
+
+def test_parse_source_coop_https():
+    result = parse_source_coop_url("https://source.coop/tyler/varve-data-mirror-test")
+    assert result == {"owner": "tyler", "product": "varve-data-mirror-test"}
+    assert "bucket" not in result
+
+
+def test_parse_source_coop_https_with_path():
+    result = parse_source_coop_url(
+        "https://source.coop/tyler/test-tiff-not-cloud-optimized/Victoria.tif"
+    )
+    assert result["owner"] == "tyler"
+    assert result["product"] == "test-tiff-not-cloud-optimized"
+
+
+def test_parse_data_source_coop_https():
+    result = parse_source_coop_url("https://data.source.coop/tyler/varve-data-mirror-test")
+    assert result == {"owner": "tyler", "product": "varve-data-mirror-test"}
+
+
+def test_parse_invalid_url():
+    with pytest.raises(ValueError):
+        parse_source_coop_url("https://source.coop/tyler")
+
+
+def test_parse_unknown_scheme():
+    with pytest.raises(ValueError):
+        parse_source_coop_url("ftp://source.coop/tyler/repo")
 
 CREDS = {
     "aws_access_key_id": "test",
