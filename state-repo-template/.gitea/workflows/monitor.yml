@@ -12,7 +12,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - run: pip install uv && uv tool install varve
+      - run: pip install uv && uv tool install "varve @ git+https://github.com/tylere/varve.git@main"
 
       - name: Configure git
         run: |
