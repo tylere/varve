@@ -1,0 +1,7 @@
+name: EPA National KML File
+source_url: https://ordsext.epa.gov/FLA/www3/national_frs.kmz
+detector_type: url
+detector_config: {}
+enabled: true
+notes: ''
+created_at: '2026-09-03T04:44:24Z'
