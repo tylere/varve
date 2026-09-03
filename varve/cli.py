@@ -5,7 +5,7 @@ import click
 from pathlib import Path
 
 from varve.state.repo import LocalGitRepo
-from varve.state.models import DatasetRecord
+from varve.state.models import DatasetRecord, DestinationRecord, AssignmentRecord
 from varve.monitor import run_all, run_dataset
 
 
@@ -55,6 +55,69 @@ def dataset_add(name: str, source_url: str, detector_type: str, notes: str, enab
     repo.commit_and_push(f"varve: add dataset {slug}")
     status = "enabled" if enable else "draft (use --enable to activate)"
     click.echo(f"Added dataset '{slug}' [{status}]")
+
+
+@cli.group()
+def destination() -> None:
+    """Manage archive destinations."""
+
+
+@destination.command("add")
+@click.option("--name", required=True, help="Human-readable destination name.")
+@click.option("--type", "dest_type", required=True,
+              type=click.Choice(["source_coop", "dryad"]), help="Destination type.")
+@click.option("--credentials-env", required=True,
+              help="Name of the environment variable holding credentials JSON.")
+def destination_add(name: str, dest_type: str, credentials_env: str) -> None:
+    """Add a new archive destination to the state repo."""
+    state_repo_path = Path(os.environ.get("VARVE_STATE_REPO_PATH", "./state-repo"))
+    repo = LocalGitRepo(state_repo_path)
+    slug = _slugify(name)
+    if repo.get_destination(slug) is not None:
+        raise click.ClickException(f"destination '{slug}' already exists")
+    record = DestinationRecord(
+        slug=slug,
+        name=name,
+        type=dest_type,
+        credentials_env=credentials_env,
+        enabled=True,
+    )
+    repo.write_destination(record)
+    repo.commit_and_push(f"varve: add destination {slug}")
+    click.echo(f"Added destination '{slug}' [{dest_type}] using env var {credentials_env}")
+
+
+@cli.group()
+def assignment() -> None:
+    """Manage dataset-to-destination assignments."""
+
+
+@assignment.command("add")
+@click.option("--dataset", "dataset_slug", required=True, help="Dataset slug.")
+@click.option("--destination", "destination_slug", required=True, help="Destination slug.")
+@click.option("--interval", "check_interval_hours", default=24, show_default=True,
+              type=int, help="Check interval in hours.")
+def assignment_add(dataset_slug: str, destination_slug: str, check_interval_hours: int) -> None:
+    """Assign a dataset to a destination."""
+    state_repo_path = Path(os.environ.get("VARVE_STATE_REPO_PATH", "./state-repo"))
+    repo = LocalGitRepo(state_repo_path)
+    if repo.get_dataset(dataset_slug) is None:
+        raise click.ClickException(f"dataset '{dataset_slug}' not found")
+    if repo.get_destination(destination_slug) is None:
+        raise click.ClickException(f"destination '{destination_slug}' not found")
+    slug = _slugify(f"{dataset_slug}-{destination_slug}")
+    if repo.get_assignment(slug) is not None:
+        raise click.ClickException(f"assignment '{slug}' already exists")
+    record = AssignmentRecord(
+        slug=slug,
+        dataset_slug=dataset_slug,
+        destination_slug=destination_slug,
+        check_interval_hours=check_interval_hours,
+        enabled=True,
+    )
+    repo.write_assignment(record)
+    repo.commit_and_push(f"varve: assign {dataset_slug} → {destination_slug}")
+    click.echo(f"Assigned '{dataset_slug}' → '{destination_slug}' (every {check_interval_hours}h)")
 
 
 @cli.group()
