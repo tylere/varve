@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 from datetime import datetime, timezone
 import click
 from pathlib import Path
@@ -134,6 +135,9 @@ def monitor_run(slug: str | None, force: bool) -> None:
     state_repo_path = Path(os.environ.get("VARVE_STATE_REPO_PATH", "./state-repo"))
     repo = LocalGitRepo(state_repo_path)
 
+    _error_outcomes = {"mirror_error", "detector_error"}
+    had_error = False
+
     if slug:
         dataset = repo.get_dataset(slug)
         if dataset is None:
@@ -143,6 +147,8 @@ def monitor_run(slug: str | None, force: bool) -> None:
             click.echo(f"Skipped {slug} — not due for a run (use --force to override)")
         else:
             click.echo(f"Done: {slug} — {run.outcome}")
+            if run.outcome in _error_outcomes:
+                had_error = True
     else:
         results = run_all(repo, force=force)
         if not results:
@@ -150,3 +156,8 @@ def monitor_run(slug: str | None, force: bool) -> None:
         else:
             for run in results:
                 click.echo(f"  {run.dataset_slug}: {run.outcome}")
+                if run.outcome in _error_outcomes:
+                    had_error = True
+
+    if had_error:
+        sys.exit(1)
