@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Varve — {{ dataset.name }}{% endblock %}
+{% block content %}
+<h1>{{ dataset.name }}</h1>
+{% if request.headers.get("authorization") or request.query_params.get("token") %}
+<div id="run-panel">
+  <button
+    hx-post="/monitor/trigger/{{ dataset.slug }}{% if token %}?token={{ token }}{% endif %}"
+    hx-target="#log-output"
+    hx-swap="innerHTML"
+    hx-on::after-request="
+      const runId = JSON.parse(event.detail.xhr.responseText).run_id;
+      document.getElementById('log-output').setAttribute('hx-ext', 'sse');
+      document.getElementById('log-output').setAttribute('sse-connect', '/monitor/stream/' + runId + '?token={{ token | default('') }}');
+      htmx.process(document.getElementById('log-output'));
+    "
+  >Run now</button>
+  <pre id="log-output" style="white-space:pre-wrap;max-height:400px;overflow:auto"></pre>
+</div>
+{% endif %}
+<p>{{ dataset.source_url }}</p>
+<p>Status: {% if dataset.enabled %}active{% else %}draft{% endif %}</p>
+<h2>Monitoring history</h2>
+{% for run in runs %}
+<article>
+  <strong>{{ run.outcome }}</strong> — {{ run.started_at }}<br>
+  {% if run.fingerprint_before != run.fingerprint_after %}
+  <small>{{ run.fingerprint_before }} → {{ run.fingerprint_after }}</small>
+  {% endif %}
+</article>
+{% else %}<p>No runs yet.</p>{% endfor %}
+<h2>Mirror copies</h2>
+{% for m in mirrors %}
+<article>
+  <a href="{{ m.remote_identifier }}">{{ m.destination_slug }}</a>
+  — {{ m.archived_at }}<br>
+  <small>DOI: {{ m.mock_doi }}</small>
+</article>
+{% else %}<p>No copies yet.</p>{% endfor %}
+{% endblock %}

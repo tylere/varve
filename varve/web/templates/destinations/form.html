@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Varve — Add Destination{% endblock %}
+{% block content %}
+<h1>Add Destination</h1>
+<form method="post" action="/destinations{% if token %}?token={{ token }}{% endif %}">
+  <label>Name <input name="name" required></label>
+  <label>Type
+    <select name="type">
+      <option value="dryad">Dryad</option>
+      <option value="source_coop">source.coop</option>
+    </select>
+  </label>
+  <label>Credentials env var <input name="credentials_env" placeholder="VARVE_DRYAD_CREDENTIALS" required></label>
+  <button type="submit">Save</button>
+</form>
+{% endblock %}

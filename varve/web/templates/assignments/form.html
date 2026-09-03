@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Varve — Add Assignment{% endblock %}
+{% block content %}
+<h1>Add Assignment</h1>
+<form method="post" action="/assignments{% if token %}?token={{ token }}{% endif %}">
+  <label>Dataset
+    <select name="dataset_slug">
+      {% for d in datasets %}<option value="{{ d.slug }}">{{ d.name }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Destination
+    <select name="destination_slug">
+      {% for d in destinations %}<option value="{{ d.slug }}">{{ d.name }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Check interval (hours) <input name="check_interval_hours" type="number" value="48" min="1"></label>
+  <button type="submit">Save</button>
+</form>
+{% endblock %}

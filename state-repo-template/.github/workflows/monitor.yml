@@ -1,0 +1,32 @@
+name: Monitor datasets
+on:
+  schedule:
+    - cron: "0 */6 * * *"   # every 6 hours
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v4
+
+      - run: uv tool install "varve @ git+https://github.com/tylere/varve.git@main"
+
+      - name: Configure git
+        run: |
+          git config user.email "varve-bot@users.noreply.github.com"
+          git config user.name "Varve Bot"
+
+      - name: Run monitor
+        env:
+          VARVE_STATE_REPO_PATH: "."
+          VARVE_DRYAD_CREDENTIALS: ${{ secrets.VARVE_DRYAD_CREDENTIALS }}
+          VARVE_SC_CREDENTIALS: ${{ secrets.VARVE_SC_CREDENTIALS }}
+        run: varve monitor run

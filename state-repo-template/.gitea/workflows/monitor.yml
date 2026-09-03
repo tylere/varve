@@ -1,0 +1,25 @@
+name: Monitor datasets
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - run: pip install uv && uv tool install "varve @ git+https://github.com/tylere/varve.git@main"
+
+      - name: Configure git
+        run: |
+          git config user.email "varve-bot@localhost"
+          git config user.name "Varve Bot"
+
+      - name: Run monitor
+        env:
+          VARVE_STATE_REPO_PATH: "."
+        run: varve monitor run
