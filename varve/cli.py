@@ -135,7 +135,7 @@ def monitor_run(slug: str | None, force: bool) -> None:
     state_repo_path = Path(os.environ.get("VARVE_STATE_REPO_PATH", "./state-repo"))
     repo = LocalGitRepo(state_repo_path)
 
-    _error_outcomes = {"mirror_error", "detector_error"}
+    _error_outcomes = {"mirror_error", "detector_error", "partial_error"}
     had_error = False
 
     if slug:

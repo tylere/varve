@@ -143,8 +143,8 @@ def run_dataset(slug: str, repo: LocalGitRepo, *, force: bool = False) -> RunRec
             repo.commit_and_push(f"varve: {slug} @ {ts} — detector_error")
             return run
 
-        # ── mirror ────────────────────────────────────────────────────────────
-        any_mirrored = False
+        # ── mirror (one attempt per assignment, all run regardless of individual failures) ──
+        mirror_outcomes: dict[str, str] = {}
         active_assignments = [a for a in assignments if a.enabled]
 
         for assignment in active_assignments:
@@ -155,7 +155,8 @@ def run_dataset(slug: str, repo: LocalGitRepo, *, force: bool = False) -> RunRec
                 creds_json = os.environ[destination.credentials_env]
                 credentials = json.loads(creds_json)
             except (KeyError, json.JSONDecodeError) as exc:
-                _log(f"SKIP {destination.slug}: env var {destination.credentials_env!r} not set or invalid JSON: {exc}")
+                _log(f"ERROR {destination.slug}: env var {destination.credentials_env!r} not set or invalid JSON: {exc}")
+                mirror_outcomes[destination.slug] = "mirror_error"
                 continue
 
             archived_at = _now_iso()
@@ -170,10 +171,12 @@ def run_dataset(slug: str, repo: LocalGitRepo, *, force: bool = False) -> RunRec
                 _log(f"Mirrored to {destination.slug}: {remote_id}")
             except MirrorSizeError as exc:
                 _log(f"SKIP {destination.slug}: {exc}")
+                mirror_outcomes[destination.slug] = "skipped"
                 continue
             except Exception:
                 tb = traceback.format_exc()
                 _log(f"ERROR mirror {destination.slug}: {tb}")
+                mirror_outcomes[destination.slug] = "mirror_error"
                 continue
 
             mirror_record = MirrorRecord(
@@ -186,11 +189,19 @@ def run_dataset(slug: str, repo: LocalGitRepo, *, force: bool = False) -> RunRec
                 source_metadata=source_metadata,
             )
             repo.write_mirror(mirror_record)
-            any_mirrored = True
+            mirror_outcomes[destination.slug] = "mirrored"
 
     # ── finalise ──────────────────────────────────────────────────────────────
-    outcome = "mirrored" if any_mirrored else "mirror_error"
-    if any_mirrored:
+    n_mirrored = sum(1 for v in mirror_outcomes.values() if v == "mirrored")
+    n_errored = sum(1 for v in mirror_outcomes.values() if v == "mirror_error")
+    if n_errored > 0 and n_mirrored > 0:
+        outcome = "partial_error"
+    elif n_mirrored > 0:
+        outcome = "mirrored"
+    else:
+        outcome = "mirror_error"
+
+    if n_mirrored > 0:
         repo.update_dataset_state(slug, fingerprint=fingerprint_after, checked_at=_now_iso())
 
     run = RunRecord(
@@ -199,6 +210,7 @@ def run_dataset(slug: str, repo: LocalGitRepo, *, force: bool = False) -> RunRec
         fingerprint_before=dataset.last_fingerprint,
         fingerprint_after=fingerprint_after,
         log="\n".join(log_lines),
+        mirror_outcomes=mirror_outcomes,
     )
     repo.write_run(run)
     repo.commit_and_push(f"varve: {slug} @ {ts} — {outcome}")
