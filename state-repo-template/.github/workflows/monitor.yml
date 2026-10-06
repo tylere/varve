@@ -3,6 +3,11 @@ on:
   schedule:
     - cron: "0 */6 * * *"   # every 6 hours
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Ignore check intervals and check every enabled dataset now"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -42,4 +47,4 @@ jobs:
           VARVE_STATE_REPO_PATH: "."
           VARVE_DRYAD_CREDENTIALS: ${{ secrets.VARVE_DRYAD_CREDENTIALS }}
           VARVE_SC_CREDENTIALS: ${{ vars.VARVE_SC_CREDENTIALS }}
-        run: varve monitor run
+        run: varve monitor run ${{ inputs.force && '--force' || '' }}
