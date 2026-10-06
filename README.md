@@ -36,7 +36,7 @@ git commit -m "Add varve monitor workflow"
 git push
 ```
 
-The workflow runs every 6 hours and can also be triggered manually from the Actions tab.
+The workflow runs every 6 hours and can also be triggered manually from the Actions tab. Tick **force** when triggering it to check every enabled dataset now, ignoring check intervals.
 
 ### 3. Configure archive destinations
 
