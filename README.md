@@ -44,44 +44,27 @@ Varve supports two archive destinations. You can configure one or both.
 
 #### source.coop
 
-source.coop provides S3-compatible storage. You'll need an account and a product (repository) created at [source.coop](https://source.coop).
+source.coop provides S3-compatible storage. You'll need an account and a product created at [source.coop](https://source.coop).
 
-Create the credentials JSON — Varve needs your access key, the S3 bucket name, your username (`owner`), and the product slug:
+Varve signs in as a source.coop [service account](https://docs.source.coop/automated-access), so no keys are stored in GitHub:
 
-```json
-{
-  "aws_access_key_id": "your-access-key-id",
-  "aws_secret_access_key": "your-secret-access-key",
-  "aws_session_token": "your-session-token",
-  "region_name": "us-east-1",
-  "endpoint_url": "https://data.source.coop",
-  "bucket": "your-bucket-name",
-  "owner": "your-username",
-  "product": "your-product-slug"
-}
-```
+1. On source.coop, open the profile page of the account that owns the product, click the gear icon, and choose **Service Accounts → New service account**.
+2. Under **How software signs in**, add a GitHub workflow: your state repo (e.g. `my-org/varve-state`), allowing runs from branch `main`.
+3. Under **What it can reach**, grant the product **Read and write**.
+4. In the state repo, under **Settings → Secrets and variables → Actions → Variables**, add:
+   - `SOURCE_COOP_SERVICE_ACCOUNT`: the service account's ID, such as `my-org--varve`
+   - `VARVE_SC_CREDENTIALS`: the product to archive into, e.g. `{"repository_url": "https://source.coop/my-org/my-product"}`
 
-The credential fields (`aws_access_key_id`, `aws_secret_access_key`, `aws_session_token`) match the format returned by the [source-coop CLI](https://github.com/source-cooperative/source-coop-cli) (`source-coop creds`). `aws_session_token` and `region_name` are optional.
+Neither value is a secret. The template workflow signs in before `varve monitor run`, and varve uses the credentials that sign-in puts in the environment.
 
-Instead of specifying `owner`, `product`, and `bucket` individually, you can provide a `repository_url` and varve will parse them automatically:
-
-```json
-{
-  "aws_access_key_id": "...",
-  "aws_secret_access_key": "...",
-  "aws_session_token": "...",
-  "repository_url": "s3://us-west-2.opendata.source.coop/tyler/varve-data-mirror-test"
-}
-```
-
-Supported URL formats:
-- `s3://{bucket}/{owner}/{product}/...` — bucket, owner, and product all extracted
-- `https://source.coop/{owner}/{product}/...` — owner and product extracted; `bucket` must still be provided separately
-- `https://data.source.coop/{owner}/{product}/...` — same as above
+Instead of `repository_url` you can give `owner` and `product` separately. Supported URL formats:
+- `https://source.coop/{owner}/{product}/...`
+- `https://data.source.coop/{owner}/{product}/...`
+- `s3://{owner}/{product}/...`
 
 Archived files appear at `https://data.source.coop/{owner}/{product}/{timestamp}/`.
 
-Add this JSON as a GitHub Actions secret named `VARVE_SC_CREDENTIALS` under **Settings → Secrets and variables → Actions**.
+Outside GitHub Actions, issue the service account an API key instead and set the variables listed under **API keys** in the [source.coop docs](https://docs.source.coop/automated-access). Varve picks those up the same way.
 
 Then register the destination in the state repo. Create `destinations/source-coop/config.yaml`:
 

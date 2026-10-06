@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write   # lets the job sign in to source.coop as a service account
 
 jobs:
   monitor:
@@ -24,9 +25,21 @@ jobs:
           git config user.email "varve-bot@users.noreply.github.com"
           git config user.name "Varve Bot"
 
+      - name: Sign in to source.coop
+        if: vars.SOURCE_COOP_SERVICE_ACCOUNT != ''
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::${{ vars.SOURCE_COOP_SERVICE_ACCOUNT }}:role/FullAccess
+          audience: https://data.source.coop
+          sts-endpoint: https://data.source.coop/.sts
+          aws-region: us-west-2
+          # Credentials last 1 hour by default and are not renewed during the job;
+          # raise this (max 43200) if a run uploads for longer.
+          # role-duration-seconds: 3600
+
       - name: Run monitor
         env:
           VARVE_STATE_REPO_PATH: "."
           VARVE_DRYAD_CREDENTIALS: ${{ secrets.VARVE_DRYAD_CREDENTIALS }}
-          VARVE_SC_CREDENTIALS: ${{ secrets.VARVE_SC_CREDENTIALS }}
+          VARVE_SC_CREDENTIALS: ${{ vars.VARVE_SC_CREDENTIALS }}
         run: varve monitor run
