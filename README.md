@@ -93,6 +93,34 @@ credentials_env: VARVE_SC_CREDENTIALS
 enabled: true
 ```
 
+#### AWS S3
+
+Any AWS S3 bucket works as a destination using long-lived IAM credentials. Create an IAM user with `s3:PutObject` permission on your bucket and generate an access key.
+
+```json
+{
+  "aws_access_key_id": "AKIA...",
+  "aws_secret_access_key": "...",
+  "bucket": "my-bucket",
+  "prefix": "varve/",
+  "region_name": "us-east-1"
+}
+```
+
+`prefix` and `region_name` are optional. For S3-compatible services (MinIO, Cloudflare R2, Backblaze B2), also add `"endpoint_url"`. `aws_session_token` is accepted but not required.
+
+Add this JSON as a GitHub Actions secret (e.g. `VARVE_S3_CREDENTIALS`), then create `destinations/s3/config.yaml`:
+
+```yaml
+slug: s3
+name: AWS S3
+type: s3
+credentials_env: VARVE_S3_CREDENTIALS
+enabled: true
+```
+
+Files are stored at `s3://{bucket}/{prefix}{dataset_slug}/{timestamp}/`. A STAC item is written alongside the data files.
+
 #### Dryad
 
 Dryad requires OAuth2 client credentials. Register an application in your [Dryad account settings](https://datadryad.org/stash/user_account) to get a client ID and secret. For testing, use the Dryad sandbox at `https://sandbox.datadryad.org`.

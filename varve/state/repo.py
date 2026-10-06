@@ -152,6 +152,7 @@ class LocalGitRepo:
                 fingerprint_before=data.get("fingerprint_before"),
                 fingerprint_after=data.get("fingerprint_after"),
                 log=data.get("log", ""),
+                mirror_outcomes=data.get("mirror_outcomes", {}),
             ))
         return records
 
@@ -244,6 +245,7 @@ class LocalGitRepo:
             "fingerprint_before": record.fingerprint_before,
             "fingerprint_after": record.fingerprint_after,
             "log": record.log,
+            "mirror_outcomes": record.mirror_outcomes,
         }
         (d / f"{record.timestamp}.json").write_text(json.dumps(data, indent=2))
 
