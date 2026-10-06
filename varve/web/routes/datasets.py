@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 from datetime import datetime, timezone
-import re
 
+from varve.slug import slugify
 from varve.web.auth import make_require_manager
 from varve.web.app import _RepoHolder
 from varve.state.models import DatasetRecord
@@ -15,7 +15,10 @@ def make_router(holder: _RepoHolder, templates: Jinja2Templates,
     mgr = make_require_manager(manager_token)
 
     def _slugify(name: str) -> str:
-        return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:64]
+        try:
+            return slugify(name)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     @router.get("/", response_class=HTMLResponse)
     async def dashboard(request: Request):

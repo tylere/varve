@@ -131,3 +131,60 @@ def test_trigger_returns_run_id(state_repo: Path):
     assert r.status_code == 200
     body = r.json()
     assert "run_id" in body
+
+
+# ── slug generation on create ────────────────────────────────────────────────
+
+@pytest.fixture
+def mgr_client(state_repo: Path) -> TestClient:
+    app = create_app(state_repo, manager_token="secret")
+    return TestClient(app, follow_redirects=False,
+                      headers={"Authorization": "Bearer secret"})
+
+
+def _post_dataset(c: TestClient, name: str):
+    return c.post("/datasets", data={"name": name, "source_url": "https://x.org/f",
+                                     "detector_type": "url", "notes": ""})
+
+
+def _post_destination(c: TestClient, name: str):
+    return c.post("/destinations", data={"name": name, "type": "dryad",
+                                         "credentials_env": "VARVE_DRYAD_CREDS"})
+
+
+def test_create_dataset_long_name_slug_has_no_trailing_dash(mgr_client: TestClient, state_repo: Path):
+    r = _post_dataset(mgr_client, "a" * 63 + " b")
+    assert r.status_code == 303
+    slug = LocalGitRepo(state_repo).list_datasets()[0].slug
+    assert len(slug) <= 64
+    assert not slug.endswith("-")
+
+
+def test_create_dataset_name_without_alphanumerics_rejected(mgr_client: TestClient, state_repo: Path):
+    r = _post_dataset(mgr_client, "!!!")
+    assert r.status_code == 400
+    assert not (state_repo / "datasets" / "config.yaml").exists()
+
+
+def test_create_destination_long_name_slug_has_no_trailing_dash(mgr_client: TestClient, state_repo: Path):
+    r = _post_destination(mgr_client, "a" * 63 + " b")
+    assert r.status_code == 303
+    slug = LocalGitRepo(state_repo).list_destinations()[0].slug
+    assert len(slug) <= 64
+    assert not slug.endswith("-")
+
+
+def test_create_destination_name_without_alphanumerics_rejected(mgr_client: TestClient, state_repo: Path):
+    r = _post_destination(mgr_client, "!!!")
+    assert r.status_code == 400
+    assert not (state_repo / "destinations" / "config.yaml").exists()
+
+
+def test_create_assignment_long_slugs_have_no_trailing_dash(mgr_client: TestClient, state_repo: Path):
+    r = mgr_client.post("/assignments", data={"dataset_slug": "a" * 63,
+                                              "destination_slug": "b",
+                                              "check_interval_hours": "48"})
+    assert r.status_code == 303
+    slug = LocalGitRepo(state_repo).list_assignments()[0].slug
+    assert len(slug) <= 64
+    assert not slug.endswith("-")

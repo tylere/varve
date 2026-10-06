@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-import re
 
+from varve.slug import slugify
 from varve.web.auth import make_require_manager
 from varve.web.app import _RepoHolder
 from varve.state.models import AssignmentRecord
@@ -14,7 +14,10 @@ def make_router(holder: _RepoHolder, templates: Jinja2Templates,
     mgr = make_require_manager(manager_token)
 
     def _slugify(a: str, b: str) -> str:
-        return re.sub(r"[^a-z0-9]+", "-", f"{a}-{b}".lower()).strip("-")[:64]
+        try:
+            return slugify(f"{a}-{b}")
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     @router.get("/assignments", response_class=HTMLResponse, dependencies=[Depends(mgr)])
     async def assignment_list(request: Request):
