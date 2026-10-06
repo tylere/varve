@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import tempfile
@@ -23,6 +24,28 @@ def _now_iso() -> str:
 def _ts_slug(ts: str) -> str:
     cleaned = ts.replace("-", "").replace(":", "").replace(".", "").rstrip("Z")
     return cleaned[:15] + "Z"
+
+
+FINGERPRINT_HASHES_MAX = 20  # bounds state.yaml if a server mints a new ETag per response
+
+
+def _content_hash(files: list[Path]) -> str:
+    """SHA-256 over each file's name and contents, independent of download order."""
+    h = hashlib.sha256()
+    for f in sorted(files, key=lambda p: p.name):
+        fh = hashlib.sha256()
+        with f.open("rb") as fp:
+            for chunk in iter(lambda: fp.read(1 << 20), b""):
+                fh.update(chunk)
+        h.update(f.name.encode() + b"\0" + fh.digest())
+    return "sha256:" + h.hexdigest()
+
+
+def _remember(fingerprint_hashes: dict[str, str], fingerprint: str, content_hash: str) -> dict[str, str]:
+    """Record fingerprint → content hash as the newest entry, keeping the most recent few."""
+    updated = {k: v for k, v in fingerprint_hashes.items() if k != fingerprint}
+    updated[fingerprint] = content_hash
+    return dict(list(updated.items())[-FINGERPRINT_HASHES_MAX:])
 
 
 def is_due(dataset: DatasetRecord, assignments: list[AssignmentRecord]) -> bool:
@@ -105,9 +128,8 @@ def run_dataset(slug: str, repo: LocalGitRepo, *, force: bool = False) -> RunRec
         return run
 
     # ── unchanged check ───────────────────────────────────────────────────────
-    # force only bypasses is_due; matching fingerprints always means unchanged
-    if fingerprint_after == dataset.last_fingerprint:
-        _log("Fingerprint unchanged — no action needed")
+    def _unchanged(msg: str, **state) -> RunRecord:
+        _log(msg)
         run = RunRecord(
             dataset_slug=slug, timestamp=ts, started_at=started_at,
             finished_at=_now_iso(), outcome="unchanged",
@@ -116,9 +138,15 @@ def run_dataset(slug: str, repo: LocalGitRepo, *, force: bool = False) -> RunRec
             log="\n".join(log_lines),
         )
         repo.write_run(run)
-        repo.update_dataset_state(slug, checked_at=_now_iso())
+        repo.update_dataset_state(slug, checked_at=_now_iso(), **state)
         repo.commit_and_push(f"varve: {slug} @ {ts} — unchanged")
         return run
+
+    # force only bypasses is_due; matching fingerprints always means unchanged
+    if fingerprint_after == dataset.last_fingerprint:
+        return _unchanged("Fingerprint unchanged — no action needed")
+    if dataset.fingerprint_hashes.get(fingerprint_after) in dataset.archived_hashes:
+        return _unchanged(f"Fingerprint {fingerprint_after!r} previously served archived content — no action needed")
 
     _log(f"Change detected: {dataset.last_fingerprint!r} → {fingerprint_after!r}")
 
@@ -142,6 +170,12 @@ def run_dataset(slug: str, repo: LocalGitRepo, *, force: bool = False) -> RunRec
             repo.write_run(run)
             repo.commit_and_push(f"varve: {slug} @ {ts} — detector_error")
             return run
+
+        content_hash = _content_hash(files)
+        fingerprint_hashes = _remember(dataset.fingerprint_hashes, fingerprint_after, content_hash)
+        if content_hash in dataset.archived_hashes:
+            return _unchanged("Content matches an archived copy — not re-archiving",
+                              fingerprint_hashes=fingerprint_hashes)
 
         # ── mirror (one attempt per assignment, all run regardless of individual failures) ──
         mirror_outcomes: dict[str, str] = {}
@@ -202,7 +236,11 @@ def run_dataset(slug: str, repo: LocalGitRepo, *, force: bool = False) -> RunRec
         outcome = "mirror_error"
 
     if n_mirrored > 0:
-        repo.update_dataset_state(slug, fingerprint=fingerprint_after, checked_at=_now_iso())
+        repo.update_dataset_state(
+            slug, fingerprint=fingerprint_after, checked_at=_now_iso(),
+            fingerprint_hashes=fingerprint_hashes,
+            archived_hashes=dataset.archived_hashes + [content_hash],
+        )
 
     run = RunRecord(
         dataset_slug=slug, timestamp=ts, started_at=started_at,
