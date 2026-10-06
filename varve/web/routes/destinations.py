@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, Request, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-import re
 
+from varve.slug import slugify
 from varve.web.auth import make_require_manager
 from varve.web.app import _RepoHolder
 from varve.state.models import DestinationRecord
@@ -14,7 +14,10 @@ def make_router(holder: _RepoHolder, templates: Jinja2Templates,
     mgr = make_require_manager(manager_token)
 
     def _slugify(name: str) -> str:
-        return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:64]
+        try:
+            return slugify(name)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     @router.get("/destinations", response_class=HTMLResponse, dependencies=[Depends(mgr)])
     async def destination_list(request: Request):
@@ -35,6 +38,8 @@ def make_router(holder: _RepoHolder, templates: Jinja2Templates,
     ):
         repo = holder.get()
         slug = _slugify(name)
+        if repo.get_destination(slug) is not None:
+            raise HTTPException(status_code=409, detail=f"destination '{slug}' already exists")
         record = DestinationRecord(
             slug=slug, name=name, type=type,
             credentials_env=credentials_env, enabled=True,

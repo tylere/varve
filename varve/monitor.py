@@ -188,6 +188,7 @@ def run_dataset(slug: str, repo: LocalGitRepo, *, force: bool = False) -> RunRec
                 mock_doi=mock_doi,
                 source_metadata=source_metadata,
             )
+            repo.write_mirror(mirror_record)
             mirror_outcomes[destination.slug] = "mirrored"
 
     # ── finalise ──────────────────────────────────────────────────────────────

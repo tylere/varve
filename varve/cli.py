@@ -1,17 +1,20 @@
 import os
-import re
 import sys
 from datetime import datetime, timezone
 import click
 from pathlib import Path
 
+from varve.slug import slugify
 from varve.state.repo import LocalGitRepo
 from varve.state.models import DatasetRecord, DestinationRecord, AssignmentRecord
 from varve.monitor import run_all, run_dataset
 
 
 def _slugify(name: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:64]
+    try:
+        return slugify(name)
+    except ValueError as e:
+        raise click.ClickException(str(e))
 
 
 @click.group()

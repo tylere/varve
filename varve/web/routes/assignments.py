@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-import re
 
+from varve.slug import slugify
 from varve.web.auth import make_require_manager
 from varve.web.app import _RepoHolder
 from varve.state.models import AssignmentRecord
@@ -14,7 +14,10 @@ def make_router(holder: _RepoHolder, templates: Jinja2Templates,
     mgr = make_require_manager(manager_token)
 
     def _slugify(a: str, b: str) -> str:
-        return re.sub(r"[^a-z0-9]+", "-", f"{a}-{b}".lower()).strip("-")[:64]
+        try:
+            return slugify(f"{a}-{b}")
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     @router.get("/assignments", response_class=HTMLResponse, dependencies=[Depends(mgr)])
     async def assignment_list(request: Request):
@@ -42,7 +45,13 @@ def make_router(holder: _RepoHolder, templates: Jinja2Templates,
         check_interval_hours: int = Form(48),
     ):
         repo = holder.get()
+        if repo.get_dataset(dataset_slug) is None:
+            raise HTTPException(status_code=400, detail=f"dataset '{dataset_slug}' not found")
+        if repo.get_destination(destination_slug) is None:
+            raise HTTPException(status_code=400, detail=f"destination '{destination_slug}' not found")
         slug = _slugify(dataset_slug, destination_slug)
+        if repo.get_assignment(slug) is not None:
+            raise HTTPException(status_code=409, detail=f"assignment '{slug}' already exists")
         record = AssignmentRecord(
             slug=slug, dataset_slug=dataset_slug, destination_slug=destination_slug,
             check_interval_hours=check_interval_hours, enabled=True,
