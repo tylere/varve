@@ -180,7 +180,49 @@ def test_create_destination_name_without_alphanumerics_rejected(mgr_client: Test
     assert not (state_repo / "destinations" / "config.yaml").exists()
 
 
+def test_create_dataset_duplicate_rejected(mgr_client: TestClient, state_repo: Path):
+    _post_dataset(mgr_client, "New DS")
+    r = mgr_client.post("/datasets", data={"name": "New DS", "source_url": "https://other.org/g",
+                                           "detector_type": "url", "notes": ""})
+    assert r.status_code == 409
+    assert LocalGitRepo(state_repo).get_dataset("new-ds").source_url == "https://x.org/f"
+
+
+def test_create_destination_duplicate_rejected(mgr_client: TestClient, state_repo: Path):
+    _post_destination(mgr_client, "Dryad Sandbox")
+    r = mgr_client.post("/destinations", data={"name": "Dryad Sandbox", "type": "source_coop",
+                                               "credentials_env": "OTHER"})
+    assert r.status_code == 409
+    assert LocalGitRepo(state_repo).get_destination("dryad-sandbox").type == "dryad"
+
+
+def test_create_assignment_duplicate_rejected(mgr_client: TestClient, state_repo: Path):
+    _post_dataset(mgr_client, "ds")
+    _post_destination(mgr_client, "dest")
+    data = {"dataset_slug": "ds", "destination_slug": "dest", "check_interval_hours": "48"}
+    mgr_client.post("/assignments", data=data)
+    r = mgr_client.post("/assignments", data={**data, "check_interval_hours": "1"})
+    assert r.status_code == 409
+    assert LocalGitRepo(state_repo).get_assignment("ds-dest").check_interval_hours == 48
+
+
+@pytest.mark.parametrize("missing", ["dataset", "destination"])
+def test_create_assignment_missing_reference_rejected(mgr_client: TestClient, state_repo: Path,
+                                                      missing: str):
+    if missing != "dataset":
+        _post_dataset(mgr_client, "ds")
+    if missing != "destination":
+        _post_destination(mgr_client, "dest")
+    r = mgr_client.post("/assignments", data={"dataset_slug": "ds", "destination_slug": "dest",
+                                              "check_interval_hours": "48"})
+    assert r.status_code == 400
+    assert f"{missing} " in r.json()["detail"] and "not found" in r.json()["detail"]
+    assert LocalGitRepo(state_repo).list_assignments() == []
+
+
 def test_create_assignment_long_slugs_have_no_trailing_dash(mgr_client: TestClient, state_repo: Path):
+    _post_dataset(mgr_client, "a" * 63)
+    _post_destination(mgr_client, "b")
     r = mgr_client.post("/assignments", data={"dataset_slug": "a" * 63,
                                               "destination_slug": "b",
                                               "check_interval_hours": "48"})

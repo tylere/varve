@@ -45,7 +45,13 @@ def make_router(holder: _RepoHolder, templates: Jinja2Templates,
         check_interval_hours: int = Form(48),
     ):
         repo = holder.get()
+        if repo.get_dataset(dataset_slug) is None:
+            raise HTTPException(status_code=400, detail=f"dataset '{dataset_slug}' not found")
+        if repo.get_destination(destination_slug) is None:
+            raise HTTPException(status_code=400, detail=f"destination '{destination_slug}' not found")
         slug = _slugify(dataset_slug, destination_slug)
+        if repo.get_assignment(slug) is not None:
+            raise HTTPException(status_code=409, detail=f"assignment '{slug}' already exists")
         record = AssignmentRecord(
             slug=slug, dataset_slug=dataset_slug, destination_slug=destination_slug,
             check_interval_hours=check_interval_hours, enabled=True,

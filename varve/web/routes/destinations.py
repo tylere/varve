@@ -38,6 +38,8 @@ def make_router(holder: _RepoHolder, templates: Jinja2Templates,
     ):
         repo = holder.get()
         slug = _slugify(name)
+        if repo.get_destination(slug) is not None:
+            raise HTTPException(status_code=409, detail=f"destination '{slug}' already exists")
         record = DestinationRecord(
             slug=slug, name=name, type=type,
             credentials_env=credentials_env, enabled=True,

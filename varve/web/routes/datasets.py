@@ -68,6 +68,8 @@ def make_router(holder: _RepoHolder, templates: Jinja2Templates,
     ):
         repo = holder.get()
         slug = _slugify(name)
+        if repo.get_dataset(slug) is not None:
+            raise HTTPException(status_code=409, detail=f"dataset '{slug}' already exists")
         source_urls = [u.strip() for u in source_urls_text.splitlines() if u.strip()]
         record = DatasetRecord(
             slug=slug, name=name, source_url=source_url,
