@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -40,10 +40,11 @@ class RunRecord:
     timestamp: str          # filename-safe ISO slug, e.g. "20260829T140000Z"
     started_at: str         # full ISO-8601
     finished_at: str | None
-    outcome: str            # unchanged|mirrored|disappeared|mirror_error|detector_error
+    outcome: str            # unchanged|mirrored|partial_error|mirror_error|disappeared|detector_error
     fingerprint_before: str | None
     fingerprint_after: str | None
     log: str
+    mirror_outcomes: dict[str, str] = field(default_factory=dict)  # dest_slug → mirrored|mirror_error|skipped
 
 
 @dataclass
