@@ -75,6 +75,8 @@ class LocalGitRepo:
             created_at=config["created_at"],
             last_fingerprint=state.get("last_fingerprint"),
             last_checked_at=state.get("last_checked_at"),
+            fingerprint_hashes=state.get("fingerprint_hashes", {}),
+            archived_hashes=state.get("archived_hashes", []),
         )
 
     def list_datasets(self) -> list[DatasetRecord]:
@@ -202,7 +204,8 @@ class LocalGitRepo:
         )
 
     def update_dataset_state(
-        self, slug: str, *, fingerprint: str | None = None, checked_at: str | None = None
+        self, slug: str, *, fingerprint: str | None = None, checked_at: str | None = None,
+        fingerprint_hashes: dict[str, str] | None = None, archived_hashes: list[str] | None = None,
     ) -> None:
         state_path = self.root / "datasets" / slug / "state.yaml"
         state: dict = yaml.safe_load(state_path.read_text()) if state_path.exists() else {}
@@ -211,6 +214,10 @@ class LocalGitRepo:
             state["last_fingerprint"] = fingerprint
         if checked_at is not None:
             state["last_checked_at"] = checked_at
+        if fingerprint_hashes is not None:
+            state["fingerprint_hashes"] = fingerprint_hashes
+        if archived_hashes is not None:
+            state["archived_hashes"] = archived_hashes
         state_path.write_text(yaml.dump(state, sort_keys=False) if state else "")
 
     def write_destination(self, record: DestinationRecord) -> None:

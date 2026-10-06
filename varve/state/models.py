@@ -14,6 +14,10 @@ class DatasetRecord:
     created_at: str
     last_fingerprint: str | None
     last_checked_at: str | None
+    # Load-balanced sources can report a different fingerprint per backend for the same
+    # bytes: remember which content each fingerprint served, and which content is archived
+    fingerprint_hashes: dict[str, str] = field(default_factory=dict)  # fingerprint → content hash
+    archived_hashes: list[str] = field(default_factory=list)
 
 
 @dataclass
