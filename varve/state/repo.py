@@ -34,6 +34,10 @@ class LocalGitRepo:
         except subprocess.CalledProcessError:
             pass  # no remote, or nothing to pull
 
+    def _update_readme(self) -> None:
+        from varve.readme import generate_readme
+        (self.root / "README.md").write_text(generate_readme(self))
+
     def commit_and_push(self, message: str, max_retries: int = 3) -> None:
         self._git("add", "-A")
         staged = subprocess.run(
@@ -41,6 +45,8 @@ class LocalGitRepo:
         )
         if staged.returncode == 0:
             return  # nothing to commit
+        self._update_readme()
+        self._git("add", "-A")
         self._git("commit", "-m", message)
         if not self._git("remote"):
             return  # no remote configured
