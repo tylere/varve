@@ -80,3 +80,46 @@ def test_readme_not_committed_when_nothing_to_commit(state_repo: Path):
     # no changes — commit_and_push should be a no-op and not create README
     repo.commit_and_push("should not commit")
     assert not (state_repo / "README.md").exists()
+
+
+def test_run_all_bootstraps_readme_when_nothing_due(state_repo: Path):
+    """run_all must create README even when no datasets are due for a run."""
+    from varve.monitor import run_all
+
+    repo = LocalGitRepo(state_repo)
+    # Dataset checked very recently so is_due returns False
+    ds = _make_dataset(
+        enabled=True,
+        last_checked_at="2099-01-01T00:00:00Z",  # far future → never due
+    )
+    repo.write_dataset(ds)
+    repo.commit_and_push("add dataset")
+
+    results = run_all(repo)
+    assert results == []
+    assert (state_repo / "README.md").exists()
+    readme = (state_repo / "README.md").read_text()
+    assert "Test Dataset" in readme
+
+
+def test_run_all_readme_no_spurious_commit(state_repo: Path):
+    """Second run_all with no state change does not create an extra commit."""
+    import subprocess
+    from varve.monitor import run_all
+
+    repo = LocalGitRepo(state_repo)
+    ds = _make_dataset(enabled=True, last_checked_at="2099-01-01T00:00:00Z")
+    repo.write_dataset(ds)
+    repo.commit_and_push("add dataset")
+
+    run_all(repo)  # creates README
+    log1 = subprocess.run(
+        ["git", "log", "--oneline"], cwd=state_repo, capture_output=True, text=True
+    ).stdout.strip()
+
+    run_all(repo)  # nothing changed → no new commit
+    log2 = subprocess.run(
+        ["git", "log", "--oneline"], cwd=state_repo, capture_output=True, text=True
+    ).stdout.strip()
+
+    assert log1 == log2

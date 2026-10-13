@@ -24,13 +24,20 @@ _OUTCOME_LABEL: dict[str, str] = {
 
 
 def generate_readme(repo) -> str:  # repo: LocalGitRepo (duck-typed to avoid circular import)
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     datasets = repo.list_datasets()
+
+    # Use the most recent run timestamp so content is deterministic;
+    # a run with no new records won't produce a spurious commit.
+    last_run_at: str | None = None
+    for ds in datasets:
+        runs = repo.list_runs(ds.slug)
+        if runs and (last_run_at is None or runs[0].started_at > last_run_at):
+            last_run_at = runs[0].started_at
 
     lines: list[str] = [
         "# Varve Dataset Status",
         "",
-        f"*Last updated: {now}*",
+        f"*Last updated: {_fmt_dt(last_run_at)}*",
         "",
     ]
 
