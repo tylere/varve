@@ -64,6 +64,38 @@ def test_download_all_assets(httpx_mock: HTTPXMock, tmp_path: Path):
     assert {f.name for f in files} == {"data.tif", "meta.xml"}
 
 
+STAC_COLLECTION_RELATIVE = {
+    "type": "Collection",
+    "stac_version": "1.1.0",
+    "id": "test-collection",
+    "assets": {
+        "items": {"href": "./items.parquet"},
+        "thumbnail": {"href": "../shared/thumbnail.png"},
+    },
+    "links": [],
+}
+COLLECTION_URL = "https://example.org/catalog/col/collection.json"
+
+
+def test_fingerprint_resolves_relative_hrefs(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(url=COLLECTION_URL, json=STAC_COLLECTION_RELATIVE)
+    httpx_mock.add_response(method="HEAD", url="https://example.org/catalog/col/items.parquet",
+                            headers={"ETag": '"etag1"'})
+    httpx_mock.add_response(method="HEAD", url="https://example.org/catalog/shared/thumbnail.png",
+                            headers={"ETag": '"etag2"'})
+    det = STACDetector(COLLECTION_URL, [], {})
+    assert det.compute_fingerprint().startswith("sha256:")
+
+
+def test_download_resolves_relative_hrefs(httpx_mock: HTTPXMock, tmp_path: Path):
+    httpx_mock.add_response(url=COLLECTION_URL, json=STAC_COLLECTION_RELATIVE)
+    httpx_mock.add_response(url="https://example.org/catalog/col/items.parquet", content=b"PAR1")
+    httpx_mock.add_response(url="https://example.org/catalog/shared/thumbnail.png", content=b"PNG")
+    det = STACDetector(COLLECTION_URL, [], {})
+    files = det.download(tmp_path)
+    assert {f.name: f.read_bytes() for f in files} == {"items.parquet": b"PAR1", "thumbnail.png": b"PNG"}
+
+
 def test_download_filtered_asset_keys(httpx_mock: HTTPXMock, tmp_path: Path):
     httpx_mock.add_response(url="https://example.org/item.json", json=STAC_ITEM)
     httpx_mock.add_response(url="https://example.org/data.tif", content=b"TIFF")
