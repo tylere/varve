@@ -266,4 +266,9 @@ def run_all(repo: LocalGitRepo, *, force: bool = False) -> list[RunRecord]:
             run = run_dataset(dataset.slug, repo, force=force)
             if run:
                 results.append(run)
+    # Bootstrap: ensure README exists even when nothing was due.
+    # write_readme produces deterministic content, so commit_and_push
+    # is a no-op if state hasn't changed since the last commit.
+    repo.write_readme()
+    repo.commit_and_push("varve: update README")
     return results
