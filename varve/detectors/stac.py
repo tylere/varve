@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 
@@ -26,6 +26,10 @@ class STACDetector(Detector):
             return {k: v for k, v in assets.items() if k in self.asset_keys}
         return assets
 
+    def _href(self, asset: dict) -> str:
+        # STAC allows hrefs relative to the document's location
+        return urljoin(self.stac_url, asset["href"])
+
     def fetch_metadata(self) -> dict:
         return self._get_item()
 
@@ -34,7 +38,7 @@ class STACDetector(Detector):
         assets = self._selected_assets(item)
         entries = []
         for key, asset in assets.items():
-            href = asset["href"]
+            href = self._href(asset)
             r = httpx.head(href, follow_redirects=True, timeout=30)
             r.raise_for_status()
             val = r.headers.get("etag") or r.headers.get("content-length", "0")
@@ -50,7 +54,7 @@ class STACDetector(Detector):
         assets = self._selected_assets(item)
         paths = []
         for key, asset in assets.items():
-            href = asset["href"]
+            href = self._href(asset)
             raw_name = urlparse(href).path.split("/")[-1] or key
             name = Path(raw_name).name.lstrip(".") or "file"
             dest = dest_dir / name
