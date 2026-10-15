@@ -36,13 +36,15 @@ def test_upload_stores_files_and_stac(tmp_path):
     mirror = S3Mirror(CREDS)
     remote_id = mirror.upload([f], DATASET, {"archived_at": "2026-01-01T00:00:00Z"})
 
-    assert remote_id.startswith("s3://my-test-bucket/my-dataset/")
+    assert remote_id == "s3://my-test-bucket/my-dataset/2026-01-01T00-00-00Z/"
 
     s3 = boto3.client("s3", region_name="us-east-1")
     objects = s3.list_objects_v2(Bucket="my-test-bucket")["Contents"]
-    keys = [o["Key"] for o in objects]
-    assert any("data.zip" in k for k in keys)
-    assert any("stac-item.json" in k for k in keys)
+    keys = sorted(o["Key"] for o in objects)
+    assert keys == [
+        "my-dataset/2026-01-01T00-00-00Z/data.zip",
+        "my-dataset/2026-01-01T00-00-00Z/stac-item.json",
+    ]
 
 
 @mock_aws

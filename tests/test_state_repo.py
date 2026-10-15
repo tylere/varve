@@ -58,6 +58,40 @@ def test_write_and_read_run(state_repo: Path):
     assert runs[0].outcome == "unchanged"
 
 
+def _run(ts: str, started_at: str) -> RunRecord:
+    return RunRecord(
+        dataset_slug="ds1", timestamp=ts, started_at=started_at, finished_at=started_at,
+        outcome="unchanged", fingerprint_before=None, fingerprint_after=None, log="",
+    )
+
+
+def _mirror(ts: str, archived_at: str) -> MirrorRecord:
+    return MirrorRecord(
+        dataset_slug="ds1", timestamp=ts, destination_slug="source-coop", archived_at=archived_at,
+        remote_identifier=f"https://data.source.coop/o/p/ds1/{ts}/", mock_doi="10.5072/x",
+        source_metadata={},
+    )
+
+
+def test_list_runs_newest_first_across_filename_formats(state_repo: Path):
+    # Compact (legacy) and readable names sort differently as text; order by recorded time
+    repo = LocalGitRepo(state_repo)
+    repo.write_run(_run("20261006T220753Z", "2026-10-06T22:07:53Z"))
+    repo.write_run(_run("2026-10-07T01-00-00Z", "2026-10-07T01:00:00Z"))
+    repo.write_run(_run("20261005T120000Z", "2026-10-05T12:00:00Z"))
+    assert [r.started_at for r in repo.list_runs("ds1")] == [
+        "2026-10-07T01:00:00Z", "2026-10-06T22:07:53Z", "2026-10-05T12:00:00Z",
+    ]
+
+
+def test_list_mirrors_newest_first_and_parses_timestamp(state_repo: Path):
+    repo = LocalGitRepo(state_repo)
+    repo.write_mirror(_mirror("20261006T220753Z", "2026-10-06T22:07:53Z"))
+    repo.write_mirror(_mirror("2026-10-13T18-47-00Z", "2026-10-13T18:47:00Z"))
+    mirrors = repo.list_mirrors("ds1")
+    assert [m.timestamp for m in mirrors] == ["2026-10-13T18-47-00Z", "20261006T220753Z"]
+
+
 def test_commit_and_push(state_repo: Path):
     repo = LocalGitRepo(state_repo)
     (state_repo / "datasets" / ".gitkeep").write_text("x")

@@ -80,11 +80,11 @@ def test_upload_creates_s3_objects(tmp_path: Path):
     objects = sorted(o["Key"] for o in _s3().list_objects_v2(Bucket="my-org")["Contents"])
 
     assert objects == [
-        "archive/noaa-sst/20260829T140000Z/data.csv",
-        "archive/noaa-sst/20260829T140000Z/meta.xml",
-        "archive/noaa-sst/20260829T140000Z/stac-item.json",
+        "archive/noaa-sst/2026-08-29T14-00-00Z/data.csv",
+        "archive/noaa-sst/2026-08-29T14-00-00Z/meta.xml",
+        "archive/noaa-sst/2026-08-29T14-00-00Z/stac-item.json",
     ]
-    assert remote_id == "https://data.source.coop/my-org/archive/noaa-sst/20260829T140000Z/"
+    assert remote_id == "https://data.source.coop/my-org/archive/noaa-sst/2026-08-29T14-00-00Z/"
 
 
 def test_client_targets_data_proxy():
@@ -113,10 +113,10 @@ def test_stac_item_references_correct_urls(tmp_path: Path):
     mirror.upload([f], DATASET, {"archived_at": "2026-08-29T14:00:00Z"})
 
     item = json.loads(_s3().get_object(
-        Bucket="my-org", Key="archive/noaa-sst/20260829T140000Z/stac-item.json")["Body"].read())
+        Bucket="my-org", Key="archive/noaa-sst/2026-08-29T14-00-00Z/stac-item.json")["Body"].read())
 
     hrefs = [a["href"] for a in item["assets"].values()]
-    assert hrefs == ["https://data.source.coop/my-org/archive/noaa-sst/20260829T140000Z/data.csv"]
+    assert hrefs == ["https://data.source.coop/my-org/archive/noaa-sst/2026-08-29T14-00-00Z/data.csv"]
 
 
 @mock_aws
@@ -133,5 +133,5 @@ def test_datasets_archived_in_same_second_do_not_collide(tmp_path: Path):
 
     for slug in ("noaa-sst", "epa-frs"):
         item = json.loads(_s3().get_object(
-            Bucket="my-org", Key=f"archive/{slug}/20260829T140000Z/stac-item.json")["Body"].read())
-        assert item["id"] == f"{slug}-20260829T140000Z"
+            Bucket="my-org", Key=f"archive/{slug}/2026-08-29T14-00-00Z/stac-item.json")["Body"].read())
+        assert item["id"] == f"{slug}-2026-08-29T14-00-00Z"

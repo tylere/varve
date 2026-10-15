@@ -149,7 +149,7 @@ class LocalGitRepo:
         if not d.exists():
             return []
         records = []
-        for f in sorted(d.glob("*.json"), reverse=True):
+        for f in d.glob("*.json"):
             data = json.loads(f.read_text())
             records.append(RunRecord(
                 dataset_slug=dataset_slug,
@@ -162,7 +162,9 @@ class LocalGitRepo:
                 log=data.get("log", ""),
                 mirror_outcomes=data.get("mirror_outcomes", {}),
             ))
-        return records
+        # Newest first. Sort on the recorded time, not the filename: compact
+        # ("20261006T220753Z") and readable ("2026-10-06T22-07-53Z") names don't sort together.
+        return sorted(records, key=lambda r: r.started_at, reverse=True)
 
     # ── mirror reads ──────────────────────────────────────────────────────────
 
@@ -171,10 +173,10 @@ class LocalGitRepo:
         if not d.exists():
             return []
         records = []
-        for f in sorted(d.glob("*.json"), reverse=True):
+        for f in d.glob("*.json"):
             data = json.loads(f.read_text())
-            # stem is either "{ts}-{dest_slug}" (new) or "{ts}" (legacy)
-            stem_ts = f.stem.split("-")[0] if "-" in f.stem else f.stem
+            # stem is "{ts}-{dest_slug}", or "{ts}" (legacy); both parts may contain "-"
+            stem_ts = f.stem.removesuffix(f"-{data['destination_slug']}")
             records.append(MirrorRecord(
                 dataset_slug=dataset_slug,
                 timestamp=stem_ts,
@@ -184,7 +186,7 @@ class LocalGitRepo:
                 mock_doi=data["mock_doi"],
                 source_metadata=data.get("source_metadata", {}),
             ))
-        return records
+        return sorted(records, key=lambda m: m.archived_at, reverse=True)
 
     # ── writes ────────────────────────────────────────────────────────────────
 
