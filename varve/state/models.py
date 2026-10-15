@@ -41,7 +41,7 @@ class AssignmentRecord:
 @dataclass
 class RunRecord:
     dataset_slug: str
-    timestamp: str          # filename-safe ISO slug, e.g. "20260829T140000Z"
+    timestamp: str          # filename-safe ISO slug, e.g. "2026-08-29T14-00-00Z"
     started_at: str         # full ISO-8601
     finished_at: str | None
     outcome: str            # unchanged|mirrored|partial_error|mirror_error|disappeared|detector_error

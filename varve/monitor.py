@@ -15,15 +15,11 @@ from varve.mirrors import get_mirror
 from varve.mirrors.base import MirrorSizeError
 from varve.state.models import AssignmentRecord, DatasetRecord, MirrorRecord, RunRecord
 from varve.state.repo import LocalGitRepo
+from varve.timestamp import ts_slug
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-
-
-def _ts_slug(ts: str) -> str:
-    cleaned = ts.replace("-", "").replace(":", "").replace(".", "").rstrip("Z")
-    return cleaned[:15] + "Z"
 
 
 FINGERPRINT_HASHES_MAX = 20  # bounds state.yaml if a server mints a new ETag per response
@@ -77,7 +73,7 @@ def run_dataset(slug: str, repo: LocalGitRepo, *, force: bool = False) -> RunRec
         return None
 
     started_at = _now_iso()
-    ts = _ts_slug(started_at)
+    ts = ts_slug(started_at)
     log_lines: list[str] = []
 
     def _log(msg: str) -> None:
@@ -215,7 +211,7 @@ def run_dataset(slug: str, repo: LocalGitRepo, *, force: bool = False) -> RunRec
 
             mirror_record = MirrorRecord(
                 dataset_slug=slug,
-                timestamp=_ts_slug(archived_at),
+                timestamp=ts_slug(archived_at),
                 destination_slug=destination.slug,
                 archived_at=archived_at,
                 remote_identifier=remote_id,

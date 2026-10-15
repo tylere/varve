@@ -6,12 +6,8 @@ from pathlib import Path
 import boto3
 
 from varve.state.models import DatasetRecord
+from varve.timestamp import ts_slug
 from .base import Mirror
-
-
-def _ts_to_prefix(archived_at: str) -> str:
-    cleaned = archived_at.replace("-", "").replace(":", "").replace(".", "").rstrip("Z")
-    return cleaned[:15] + "Z"
 
 
 class S3Mirror(Mirror):
@@ -46,7 +42,7 @@ class S3Mirror(Mirror):
         self.s3 = boto3.client("s3", **kwargs)
 
     def upload(self, files: list[Path], dataset: DatasetRecord, run_metadata: dict) -> str:
-        ts = _ts_to_prefix(run_metadata["archived_at"])
+        ts = ts_slug(run_metadata["archived_at"])
         key_prefix = f"{self.prefix}{dataset.slug}/{ts}"
 
         asset_hrefs: dict[str, str] = {}
