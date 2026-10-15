@@ -13,6 +13,15 @@ def _fmt_dt(iso: str | None) -> str:
         return iso
 
 
+def _archive_url(remote_identifier: str) -> str:
+    """A browsable URL for an archive. The source.coop data proxy rejects folder URLs,
+    so point those at the source.coop web page for the folder."""
+    proxy = "https://data.source.coop/"
+    if remote_identifier.startswith(proxy):
+        return "https://source.coop/" + remote_identifier[len(proxy):].rstrip("/")
+    return remote_identifier
+
+
 _OUTCOME_LABEL: dict[str, str] = {
     "unchanged": "unchanged",
     "mirrored": "mirrored ✓",
@@ -112,7 +121,7 @@ def generate_readme(repo) -> str:  # repo: LocalGitRepo (duck-typed to avoid cir
                 "|-------------|-------------|----------|",
             ]
             for m in mirrors:
-                loc = f"[link]({m.remote_identifier})" if m.remote_identifier else "—"
+                loc = f"[link]({_archive_url(m.remote_identifier)})" if m.remote_identifier else "—"
                 lines.append(f"| {_fmt_dt(m.archived_at)} | {m.destination_slug} | {loc} |")
             lines.append("")
 

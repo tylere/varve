@@ -65,6 +65,23 @@ def test_generate_readme_with_runs_and_mirrors(state_repo: Path):
     assert "| 1 |" in readme  # archived versions count in summary table
 
 
+def test_source_coop_archive_links_to_browsable_page(state_repo: Path):
+    # The data proxy rejects folder URLs (400 InvalidRequest), so link to the
+    # source.coop web page for the folder instead
+    repo = LocalGitRepo(state_repo)
+    repo.write_dataset(_make_dataset())
+    repo.write_mirror(MirrorRecord(
+        dataset_slug="test-ds", timestamp="20261010T120000Z",
+        destination_slug="source-coop", archived_at="2026-10-10T12:00:03Z",
+        remote_identifier="https://data.source.coop/tyler/prod/test-ds/20261010T120000Z/",
+        mock_doi="10.5072/varve.test-ds.1", source_metadata={},
+    ))
+
+    readme = generate_readme(repo)
+    assert "[link](https://source.coop/tyler/prod/test-ds/20261010T120000Z)" in readme
+    assert "data.source.coop" not in readme
+
+
 def test_readme_written_on_commit(state_repo: Path):
     repo = LocalGitRepo(state_repo)
     ds = _make_dataset()
