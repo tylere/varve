@@ -47,7 +47,7 @@ def test_parse_unknown_scheme():
         parse_source_coop_url("ftp://source.coop/tyler/repo")
 
 # No keys: AWS credentials come from the environment (a service account sign-in)
-CREDS = {"owner": "my-org", "product": "noaa-sst"}
+CREDS = {"owner": "my-org", "product": "archive"}
 # moto intercepts AWS hostnames only, so point uploads there rather than at the real proxy
 MOTO_CREDS = {**CREDS, "endpoint_url": "https://s3.us-east-1.amazonaws.com"}
 
@@ -80,11 +80,11 @@ def test_upload_creates_s3_objects(tmp_path: Path):
     objects = sorted(o["Key"] for o in _s3().list_objects_v2(Bucket="my-org")["Contents"])
 
     assert objects == [
-        "noaa-sst/20260829T140000Z/data.csv",
-        "noaa-sst/20260829T140000Z/meta.xml",
-        "noaa-sst/20260829T140000Z/stac-item.json",
+        "archive/noaa-sst/20260829T140000Z/data.csv",
+        "archive/noaa-sst/20260829T140000Z/meta.xml",
+        "archive/noaa-sst/20260829T140000Z/stac-item.json",
     ]
-    assert remote_id == "https://data.source.coop/my-org/noaa-sst/20260829T140000Z/"
+    assert remote_id == "https://data.source.coop/my-org/archive/noaa-sst/20260829T140000Z/"
 
 
 def test_client_targets_data_proxy():
@@ -113,7 +113,25 @@ def test_stac_item_references_correct_urls(tmp_path: Path):
     mirror.upload([f], DATASET, {"archived_at": "2026-08-29T14:00:00Z"})
 
     item = json.loads(_s3().get_object(
-        Bucket="my-org", Key="noaa-sst/20260829T140000Z/stac-item.json")["Body"].read())
+        Bucket="my-org", Key="archive/noaa-sst/20260829T140000Z/stac-item.json")["Body"].read())
 
     hrefs = [a["href"] for a in item["assets"].values()]
-    assert all(h.startswith("https://data.source.coop/") for h in hrefs)
+    assert hrefs == ["https://data.source.coop/my-org/archive/noaa-sst/20260829T140000Z/data.csv"]
+
+
+@mock_aws
+def test_datasets_archived_in_same_second_do_not_collide(tmp_path: Path):
+    _s3().create_bucket(Bucket="my-org")
+    f = tmp_path / "data.csv"
+    f.write_text("a,b")
+    other = DatasetRecord(**{**DATASET.__dict__, "slug": "epa-frs"})
+
+    mirror = SourceCoopMirror(MOTO_CREDS)
+    meta = {"archived_at": "2026-08-29T14:00:00Z"}
+    mirror.upload([f], DATASET, meta)
+    mirror.upload([f], other, meta)
+
+    for slug in ("noaa-sst", "epa-frs"):
+        item = json.loads(_s3().get_object(
+            Bucket="my-org", Key=f"archive/{slug}/20260829T140000Z/stac-item.json")["Body"].read())
+        assert item["id"] == f"{slug}-20260829T140000Z"

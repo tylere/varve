@@ -68,7 +68,7 @@ class SourceCoopMirror(Mirror):
 
     def upload(self, files: list[Path], dataset: DatasetRecord, run_metadata: dict) -> str:
         ts = _ts_to_prefix(run_metadata["archived_at"])
-        prefix = f"{self.product}/{ts}"
+        prefix = f"{self.product}/{dataset.slug}/{ts}"
         base_url = f"{DATA_PROXY_URL}/{self.owner}/{prefix}"
 
         asset_hrefs: dict[str, str] = {}

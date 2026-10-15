@@ -62,7 +62,7 @@ Instead of `repository_url` you can give `owner` and `product` separately. Suppo
 - `https://data.source.coop/{owner}/{product}/...`
 - `s3://{owner}/{product}/...`
 
-Archived files appear at `https://data.source.coop/{owner}/{product}/{timestamp}/`.
+Archived files appear at `https://data.source.coop/{owner}/{product}/{dataset_slug}/{timestamp}/`.
 
 Outside GitHub Actions, issue the service account an API key instead and set the variables listed under **API keys** in the [source.coop docs](https://docs.source.coop/automated-access). Varve picks those up the same way.
 
