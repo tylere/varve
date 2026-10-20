@@ -11,6 +11,50 @@ Varve monitors source datasets for changes and archives copies to long-term stor
 2. Varve runs on a schedule (or manually), checks each configured dataset for changes via ETag or STAC asset fingerprinting, downloads changed datasets, uploads them to configured destinations, and commits the updated state back to the repo.
 3. An optional web UI lets you browse datasets, destinations, run history, and trigger runs live with streaming log output.
 
+## State model
+
+```mermaid
+erDiagram
+    DATASET ||--o{ ASSIGNMENT : "assigned via"
+    DESTINATION ||--o{ ASSIGNMENT : "assigned via"
+    DATASET ||--o{ RUN : "checked in"
+    DATASET ||--o{ MIRROR : "archived as"
+    DESTINATION ||--o{ MIRROR : "stored at"
+    RUN ||--o{ MIRROR : "results in"
+
+    DATASET {
+        string slug
+        string source_url
+        string detector_type
+    }
+    DESTINATION {
+        string slug
+        string type
+        string credentials_env
+    }
+    ASSIGNMENT {
+        string dataset_slug
+        string destination_slug
+        int check_interval_hours
+    }
+    RUN {
+        string dataset_slug
+        string outcome
+        object mirror_outcomes
+    }
+    MIRROR {
+        string dataset_slug
+        string destination_slug
+        string remote_identifier
+    }
+```
+
+**Dataset** — a source URL varve monitors for changes.
+**Destination** — an archive backend (source.coop, S3, or Dryad).
+**Assignment** — links a dataset to a destination and sets the check schedule.
+**Run** — a record of one monitoring pass for a dataset, whether or not anything changed.
+**Mirror** — a record of one successful upload of a dataset version to a destination.
+
 ## Setting up a state repo on GitHub
 
 > The same steps apply on GitLab or Gitea — use `.gitlab-ci.yml` or `.gitea/workflows/monitor.yml` from `state-repo-template/` instead of the GitHub Actions file.
